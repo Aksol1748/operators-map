@@ -5,82 +5,81 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Карта операторов</title>
 
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { height: 100%; width: 100%; }
-    .leaflet-popup-content { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-
-    /* бейдж статуса в углу */
+    html, body { height:100%; margin:0; }
+    #map { height:100%; width:100%; }
     #status-badge{
       position:fixed; right:10px; top:10px; z-index:5000;
       padding:8px 10px; border-radius:8px; color:#fff;
       font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
       box-shadow:0 2px 8px rgba(0,0,0,.2); background:#0b6;
     }
+    .leaflet-popup-content { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="status-badge">Загружаю…</div>
 
-  <!-- Leaflet JS -->
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
   <script>
-    /***** ВСТАВЬ СЮДА свой URL веб-приложения Apps Script, которое отдаёт JSON *****/
-    const DATA_URL = 'https://script.google.com/macros/s/AKfycbwfpzTa4TbRAZQTZdw4lP8LYX_VfRcT1l72Jl8niRKJ/dev';  // <-- заменить этой строкой
+    /********** ВСТАВЬ СЮДА ССЫЛКУ НА ТВОЙ data.json В jsDelivr **********/
+    const DATA_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjp8F3_D0H3OLZspxQSGVQDvqAnEbE6QesWrR9Basmtk2xqkg_Ob8kivu43pFaR4VTPHX40rXqIq6jqhn2gZmqxVBg36BxTDkXLbiSg7tRngqf7iPFyP7feG7OtbDdHti6a-bUoUY0EonWVvpCfWxHRW7rHQT1jnrC0TvLllXS_puTQ_OnDd82tNSgj-zBfrVug-dnJ6Qg1YInLu1QRnuPk1wcxdEO8Zj2pIzpgx19d6pgQ3AVW0BRgWzXS3sHrnZ3quxtJ0ZBYJLpveJFF5ek4zyhAL-LYGFQfh77a&lib=MYwo1-sLPIurpC9TDE9fVBDgEIw69FLjT';
+    /**********************************************************************/
 
-    // Инициализация карты
+    // Фолбэк на случай, если что-то пошло не так (пара тестовых точек)
+    const FALLBACK_DATA = {
+      operators: ['Тестовый оператор'],
+      points: [
+        { id:'p1', name:'Тест 1', lat:55.7518, lng:37.6185, operator:'Тестовый оператор',
+          class:'A', freq:'3/нед', sales:'', },
+        { id:'p2', name:'Тест 2', lat:55.7600, lng:37.6200, operator:'Тестовый оператор',
+          class:'B', freq:'ежедневно', sales:'', },
+      ]
+    };
+
     const map = L.map('map', { zoomControl:true }).setView([55.75, 37.62], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // смена текста в бейдже
-    function setBadge(text, bad=false){
+    function setBadge(txt, bad=false){
       const b = document.getElementById('status-badge');
-      b.textContent = text;
+      b.textContent = txt;
       b.style.background = bad ? '#d33' : '#0b6';
     }
 
-    // загрузка JSON с отключением кэша
-    async function fetchData(){
-      const res = await fetch(DATA_URL + '?t=' + Date.now(), { cache:'no-store' });
+    async function loadJson(url){
+      const res = await fetch(url, {cache:'no-store'});
+      if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
       const txt = await res.text();
       try { return JSON.parse(txt); }
-      catch(e){
-        console.error('Ответ не JSON:\n', txt);
-        throw new Error('Ответ не JSON. Открой консоль (F12 → Console).');
-      }
+      catch(e){ console.error('Ответ не JSON:\n', txt); throw new Error('Ответ не JSON'); }
     }
 
     (async () => {
-      try{
+      try {
         setBadge('Загружаю данные…');
-        const data = await fetchData();            // {operators:[], points:[]}
-        const points = Array.isArray(data?.points) ? data.points : [];
-        const ops    = Array.isArray(data?.operators) ? data.operators : [];
-
-        setBadge(`Операторов: ${ops.length} • Точек: ${points.length}`);
-
-        if (!points.length){
-          console.warn('Пустой массив points');
-          return;
+        let data;
+        try {
+          data = await loadJson(DATA_URL);
+        } catch(err) {
+          console.warn('Не удалось загрузить из DATA_URL, показываю фолбэк:', err);
+          data = FALLBACK_DATA;
+          setBadge('Фолбэк-данные (проверь DATA_URL)', true);
         }
 
-        const layer  = L.layerGroup().addTo(map);
+        const points = Array.isArray(data?.points) ? data.points : [];
+        const ops    = Array.isArray(data?.operators) ? data.operators : [];
+        setBadge(`Операторов: ${ops.length} • Точек: ${points.length}`);
+
+        if (!points.length){ console.warn('Пустой массив points'); return; }
+
+        const layer = L.layerGroup().addTo(map);
         const bounds = [];
 
         for (const p of points){
@@ -88,7 +87,7 @@
           if (!isFinite(lat) || !isFinite(lng)) continue;
 
           L.circleMarker([lat, lng], {
-            radius: 6, weight: 1, color:'#2d6cdf', fillColor:'#2d6cdf', fillOpacity:.85
+            radius:6, weight:1, color:'#2d6cdf', fillColor:'#2d6cdf', fillOpacity:.85
           })
           .bindPopup(
             `<b>${p.name ?? ''}</b><br>` +
@@ -102,11 +101,11 @@
           bounds.push([lat, lng]);
         }
 
-        if (bounds.length) map.fitBounds(bounds, { padding:[20,20] });
-      }catch(err){
-        console.error(err);
-        setBadge('Ошибка: ' + err.message, true);
-        alert('Не удалось загрузить данные. Проверь DATA_URL и что у веб-приложения доступ «Anyone».');
+        if (bounds.length) map.fitBounds(bounds, {padding:[20,20]});
+      } catch (e) {
+        console.error(e);
+        setBadge('Ошибка: ' + e.message, true);
+        alert('Не удалось загрузить данные. См. консоль (F12 → Console).');
       }
     })();
   </script>
