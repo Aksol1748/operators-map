@@ -13,13 +13,13 @@
 .op-toolbar button{padding:8px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer}
 .op-toolbar .primary{font-weight:600}
 
-/* Сворачиваемый блок фильтров */
+/* Сворачиваемый блок «Фильтры» */
 details.filter-block{margin:8px 0;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
 details.filter-block>summary{cursor:pointer;padding:10px 12px;background:#f8fafc;font-weight:600}
 details.filter-block>.block{padding:10px 12px;display:grid;gap:8px}
 @media (max-width:900px){ details.filter-block>.block{grid-template-columns:1fr} }
 
-/* Список слоёв – прокручиваемый */
+/* Список слоёв прокручиваемый */
 .leaflet-control-layers-overlays{max-height:40vh;overflow:auto;padding:8px}
 </style>
 </head>
@@ -1700,6 +1700,71 @@ if(!window.__opIndex){window.__opIndex={}}; if(!window.__opIndex[key]) window.__
       }
     });
   }catch(e){ console.warn('[TG] init error', e); }
+})();
+</script>
+<script id="mobile-ui-logic">
+(function(){
+  if (window.__map_ui_inited) return; window.__map_ui_inited = true;
+
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const wrap = document.getElementById('opControlWrapper') || document.body;
+
+  /* Липкая панель: Назначить / Применить / Скачать HTML */
+  const tb=document.createElement('div'); tb.className='op-toolbar';
+  const addBtn=(t,fn,cls='')=>{const b=document.createElement('button');b.textContent=t;b.className=cls;b.type='button';b.addEventListener('click',fn);tb.appendChild(b);return b;};
+  const findBtn=re=>$$('button').find(b=>re.test((b.textContent||'').trim()));
+  const btnAssignSrc = findBtn(/^\s*Назначить\s*$/i);
+  const btnApplySrc  = findBtn(/применить в этой сессии/i);
+  const btnSaveSrc   = findBtn(/скачать обновлённый html/i);
+  addBtn('Назначить', ()=>btnAssignSrc?.click(), 'primary');
+  addBtn('Применить', ()=>btnApplySrc?.click(), 'primary');
+  addBtn('Скачать HTML', ()=>btnSaveSrc?.click());
+  wrap.prepend(tb);
+
+  /* Сворачиваемый блок «Фильтры»: переносим всё между Поиском и «Экспорт всех изменений (CSV)» */
+  const search = $$('input[placeholder]').find(i=>/поиск по операторам/i.test(i.placeholder||''));
+  const exportBtn = findBtn(/экспорт всех изменений/i);
+  function takeRange(first,last){
+    const frag=document.createDocumentFragment(); let cur=first;
+    while(cur&&cur!==last){ const next=cur.nextElementSibling; frag.appendChild(cur); cur=next; }
+    if(last) frag.appendChild(last); return frag;
+  }
+  if(search && exportBtn){
+    const from = search.closest('div')||search.parentElement;
+    const to   = exportBtn.parentElement;
+    const det=document.createElement('details'); det.className='filter-block'; det.open=false;
+    det.innerHTML='<summary>Фильтры</summary><div class="block"></div>';
+    wrap.insertBefore(det, tb.nextSibling);
+    det.querySelector('.block').append(takeRange(from,to));
+  }
+
+  /* Резервное «Скачать HTML», если штатная кнопка молчит */
+  if(btnSaveSrc){
+    btnSaveSrc.addEventListener('click', function(){
+      setTimeout(()=>{ if(document.querySelector('a[download]')) return;
+        try{
+          const html = new XMLSerializer().serializeToString(document);
+          const url  = URL.createObjectURL(new Blob([html],{type:'text/html;charset=utf-8'}));
+          const a=document.createElement('a'); a.href=url; a.download='operators_map.html';
+          document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(url); a.remove();},500);
+        }catch(e){}
+      },300);
+    }, true);
+  }
+
+  /* Нормализация групп «Оператор: …», чтобы Назначить/Применить не путались */
+  function N(s){return String(s||'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').toLowerCase().trim();}
+  window.__opIndex = window.__opIndex || {};
+  let map=null; for(const k in window){const m=window[k]; if(m&&m._leaflet_id&&m.addLayer){map=m;break;}}
+  if(map){
+    document.querySelectorAll('.leaflet-control-layers-overlays label').forEach(lb=>{
+      const txt=(lb.textContent||'').trim();
+      if(/^оператор\s*:|^Оператор\s*:/i.test(txt)){
+        const key=N(txt);
+        if(!window.__opIndex[key]) window.__opIndex[key]=L.featureGroup().addTo(map);
+      }
+    });
+  }
 })();
 </script>
 
