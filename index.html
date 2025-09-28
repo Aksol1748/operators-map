@@ -14,12 +14,22 @@
   />
 
   <style>
-    html, body, #map { height: 100%; margin: 0; }
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; width: 100%; }
     .leaflet-popup-content { font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+    /* бейдж статуса в углу */
+    #status-badge{
+      position:fixed; right:10px; top:10px; z-index:5000;
+      padding:8px 10px; border-radius:8px; color:#fff;
+      font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      box-shadow:0 2px 8px rgba(0,0,0,.2); background:#0b6;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="status-badge">Загружаю…</div>
 
   <!-- Leaflet JS -->
   <script
@@ -29,30 +39,56 @@
   ></script>
 
   <script>
-    // ВСТАВЬ СЮДА свой URL веб-приложения, который отдаёт JSON
-    const DATA_URL = 'https://script.google.com/macros/s/AKfycbx4cRvIJBKjs9sxfLOUYB9Im6z2dsXwKEjmN8dammHdQJBCzy2OI4UkT4Qrp-at72t13w/exec';
+    /***** ВСТАВЬ СЮДА свой URL веб-приложения Apps Script, которое отдаёт JSON *****/
+    const DATA_URL = 'https://script.google.com/macros/s/AKfycbwNihQ1fF9SlG5eivOMZ7jrLp5Nq0tj8gSBdjLdE2RYw29c-33Kl4ALxQQHjRwvo1OE-Q/exec';  // <-- заменить этой строкой
 
-    // 1) создаём карту
-    const map = L.map('map', { zoomControl: true }).setView([55.75, 37.62], 10);
+    // Инициализация карты
+    const map = L.map('map', { zoomControl:true }).setView([55.75, 37.62], 10);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19, attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // 2) загружаем JSON и рисуем точки
-    (async () => {
-      try {
-        const res  = await fetch(DATA_URL + '?t=' + Date.now()); // отключаем кеш
-        const data = await res.json();
+    // смена текста в бейдже
+    function setBadge(text, bad=false){
+      const b = document.getElementById('status-badge');
+      b.textContent = text;
+      b.style.background = bad ? '#d33' : '#0b6';
+    }
 
-        const layer = L.layerGroup().addTo(map);
+    // загрузка JSON с отключением кэша
+    async function fetchData(){
+      const res = await fetch(DATA_URL + '?t=' + Date.now(), { cache:'no-store' });
+      const txt = await res.text();
+      try { return JSON.parse(txt); }
+      catch(e){
+        console.error('Ответ не JSON:\n', txt);
+        throw new Error('Ответ не JSON. Открой консоль (F12 → Console).');
+      }
+    }
+
+    (async () => {
+      try{
+        setBadge('Загружаю данные…');
+        const data = await fetchData();            // {operators:[], points:[]}
+        const points = Array.isArray(data?.points) ? data.points : [];
+        const ops    = Array.isArray(data?.operators) ? data.operators : [];
+
+        setBadge(`Операторов: ${ops.length} • Точек: ${points.length}`);
+
+        if (!points.length){
+          console.warn('Пустой массив points');
+          return;
+        }
+
+        const layer  = L.layerGroup().addTo(map);
         const bounds = [];
 
-        for (const p of data.points || []) {
+        for (const p of points){
           const lat = Number(p.lat), lng = Number(p.lng);
           if (!isFinite(lat) || !isFinite(lng)) continue;
 
           L.circleMarker([lat, lng], {
-            radius: 6, weight: 1, color: '#2d6cdf', fillColor: '#2d6cdf', fillOpacity: 0.85
+            radius: 6, weight: 1, color:'#2d6cdf', fillColor:'#2d6cdf', fillOpacity:.85
           })
           .bindPopup(
             `<b>${p.name ?? ''}</b><br>` +
@@ -66,11 +102,11 @@
           bounds.push([lat, lng]);
         }
 
-        if (bounds.length) map.fitBounds(bounds, { padding: [20, 20] });
-        console.log('Операторов:', (data.operators || []).length, 'Точек:', (data.points || []).length);
-      } catch (e) {
-        console.error('Ошибка загрузки данных:', e);
-        alert('Не удалось загрузить данные. Проверь DATA_URL и доступ «Anyone» у веб-приложения.');
+        if (bounds.length) map.fitBounds(bounds, { padding:[20,20] });
+      }catch(err){
+        console.error(err);
+        setBadge('Ошибка: ' + err.message, true);
+        alert('Не удалось загрузить данные. Проверь DATA_URL и что у веб-приложения доступ «Anyone».');
       }
     })();
   </script>
