@@ -1,33 +1,27 @@
-<html><head>
-<meta content="text/html; charset=utf-8" http-equiv="content-type"/>
-<script>
-            L_NO_TOUCH = false;
-            L_DISABLE_3D = false;
-        </script>
-<style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
-<style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.6.0/dist/leaflet.js"></script>
-<script src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
-<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
-<link href="https://cdn.jsdelivr.net/npm/leaflet@1.6.0/dist/leaflet.css" rel="stylesheet"/>
-<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet"/>
-<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap-theme.min.css" rel="stylesheet"/>
-<link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css" rel="stylesheet"/>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css" rel="stylesheet"/>
-<link href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css" rel="stylesheet"/>
-<meta content="width=device-width,
-                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
-<style>
-                #map_07240632b07852a755665ada692280cf {
-                    position: relative;
-                    width: 100.0%;
-                    height: 100.0%;
-                    left: 0.0%;
-                    top: 0.0%;
-                }
-            </style>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<style id="mobile-ui-patch">
+:root{--gap:8px;--pad:8px}
+#opControlWrapper{max-width:100%;padding-bottom:56px}
+
+/* Липкая верхняя панель */
+.op-toolbar{
+  position:sticky;top:0;background:#fff;padding:var(--pad);
+  border:1px solid #e5e7eb;border-radius:12px;z-index:1000;
+  display:flex;flex-wrap:wrap;gap:var(--gap);align-items:center
+}
+.op-toolbar button{padding:8px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer}
+.op-toolbar .primary{font-weight:600}
+
+/* Сворачиваемый блок фильтров */
+details.filter-block{margin:8px 0;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+details.filter-block>summary{cursor:pointer;padding:10px 12px;background:#f8fafc;font-weight:600}
+details.filter-block>.block{padding:10px 12px;display:grid;gap:8px}
+@media (max-width:900px){ details.filter-block>.block{grid-template-columns:1fr} }
+
+/* Список слоёв – прокручиваемый */
+.leaflet-control-layers-overlays{max-height:40vh;overflow:auto;padding:8px}
+</style>
 </head>
 <body class="">
 <div class="folium-map" id="map_07240632b07852a755665ada692280cf" style="outline: none;"></div>
@@ -2136,6 +2130,74 @@ if(!window.__opIndex){window.__opIndex={}}; if(!window.__opIndex[key]) window.__
   }catch(e){ console.warn('[TG] init error', e); }
 })();
 </script>
+<script id="mobile-ui-logic">
+(function(){
+  const $ = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const wrap = document.getElementById('opControlWrapper') || document.body;
+
+  /* Липкая панель с 3 главными кнопками */
+  const tb = document.createElement('div'); tb.className = 'op-toolbar';
+  function btn(t, fn, cls=''){ const b=document.createElement('button'); b.textContent=t; b.type='button'; b.className=cls; b.addEventListener('click', fn); tb.appendChild(b); return b; }
+  const btnAssignSrc = $$('button').find(b => /^\s*Назначить\s*$/i.test(b.textContent||''));
+  const btnApplySrc  = $$('button').find(b => /применить в этой сессии/i.test(b.textContent||''));
+  const btnSaveSrc   = $$('button').find(b => /скачать обновлённый html/i.test(b.textContent||''));
+  btn('Назначить', () => btnAssignSrc?.click(), 'primary');
+  btn('Применить', () => btnApplySrc?.click(),  'primary');
+  btn('Скачать HTML', () => btnSaveSrc?.click());
+  wrap.prepend(tb);
+
+  /* Сворачиваемые «Фильтры» — переносим всё между Поиском и «Экспорт изменений (CSV)» */
+  const search = $$('input[placeholder]').find(i => /поиск по операторам/i.test(i.placeholder||''));
+  const exportBtn = $$('button').find(b => /экспорт всех изменений/i.test(b.textContent||''));
+  function take(first,last){
+    const frag=document.createDocumentFragment();
+    let cur=first;
+    while(cur && cur!==last){ const next=cur.nextElementSibling; frag.appendChild(cur); cur=next; }
+    if(last) frag.appendChild(last);
+    return frag;
+  }
+  if (search && exportBtn){
+    const from = search.closest('div') || search.parentElement;
+    const to   = exportBtn.parentElement;
+    const det = document.createElement('details'); det.className='filter-block'; det.open=false;
+    det.innerHTML = '<summary>Фильтры</summary><div class="block"></div>';
+    wrap.insertBefore(det, tb.nextSibling);
+    det.querySelector('.block').append(take(from, to));
+  }
+
+  /* Подстраховка «Скачать HTML» — если нативная кнопка молчит */
+  if (btnSaveSrc){
+    btnSaveSrc.addEventListener('click', function(){
+      setTimeout(()=>{ 
+        if (document.querySelector('a[download]')) return;  // значит штатно отработало
+        try{
+          const html = new XMLSerializer().serializeToString(document);
+          const url  = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+          const a = document.createElement('a'); a.href=url; a.download='operators_map.html';
+          document.body.appendChild(a); a.click();
+          setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 500);
+        }catch(e){}
+      }, 300);
+    }, true);
+  }
+
+  /* Нормализация групп «Оператор: …», чтобы Назначить/Применить не путались */
+  function N(s){ return String(s||'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').toLowerCase().trim(); }
+  window.__opIndex = window.__opIndex || {};
+  const map = (function(){ for (const k in window){ const m=window[k]; if(m && m._leaflet_id && m.addLayer) return m; } return null; })();
+  if (map){
+    document.querySelectorAll('.leaflet-control-layers-overlays label').forEach(lb=>{
+      const txt = (lb.textContent||'').trim();
+      if (/^оператор\s*:|^Оператор\s*:/i.test(txt)){
+        const key = N(txt);
+        if (!window.__opIndex[key]) window.__opIndex[key] = L.featureGroup().addTo(map);
+      }
+    });
+  }
+})();
+</script>
+
 
 </body>', bootstrap + '\\n
 <!-- v9: Самотест + безопасный "Новый оператор" + мульти‑базовые карты (без ломки существующего) -->
