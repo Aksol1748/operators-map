@@ -1,27 +1,91 @@
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script id="mobile-ui-lite">
+(function(){
+  if (window.__ui_lite_inited) return; window.__ui_lite_inited = true;
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const wrap = document.getElementById('opControlWrapper') || document.body;
 
-<style id="mobile-ui-patch">
-:root{--gap:8px;--pad:8px}
-#opControlWrapper{max-width:100%;padding-bottom:56px}
+  /* --- 0) Подчистим случайно выведенный на страницу "код сохранения", если он попал как текст --- */
+  $$('pre,textarea,code').forEach(el=>{
+    const t = (el.textContent||'');
+    if (t.includes('new XMLSerializer') && t.includes('download') && t.includes('operators_map_with_changes')) {
+      el.remove();
+    }
+  });
 
-/* Липкая верхняя панель */
-.op-toolbar{
-  position:sticky;top:0;background:#fff;padding:var(--pad);
-  border:1px solid #e5e7eb;border-radius:12px;z-index:1000;
-  display:flex;flex-wrap:wrap;gap:var(--gap);align-items:center
-}
-.op-toolbar button{padding:8px 12px;border:1px solid #d1d5db;border-radius:10px;background:#fff;cursor:pointer}
-.op-toolbar .primary{font-weight:600}
+  /* --- 1) Компактная панель с 3 кнопками + кнопка Фильтры --- */
+  const tb = document.createElement('div'); tb.className = 'op-toolbar';
+  const btn = (text, fn, cls='') => {
+    const b = document.createElement('button'); b.type='button'; b.textContent=text; b.className=cls; b.onclick=fn; tb.appendChild(b); return b;
+  };
 
-/* Сворачиваемый блок «Фильтры» */
-details.filter-block{margin:8px 0;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
-details.filter-block>summary{cursor:pointer;padding:10px 12px;background:#f8fafc;font-weight:600}
-details.filter-block>.block{padding:10px 12px;display:grid;gap:8px}
-@media (max-width:900px){ details.filter-block>.block{grid-template-columns:1fr} }
+  // Ищем исходные кнопки, к которым будем "проксировать" клики
+  const findBtn = re => $$('button').find(b => re.test((b.textContent||'').trim()));
+  const srcAssign = findBtn(/^\s*Назначить\s*$/i);
+  const srcApply  = findBtn(/применить в этой сессии/i);
+  const srcSave   = findBtn(/скачать обновлённый html/i);
 
-/* Список слоёв прокручиваемый */
-.leaflet-control-layers-overlays{max-height:40vh;overflow:auto;padding:8px}
-</style>
+  btn('Назначить', ()=>srcAssign?.click(), 'primary');
+  btn('Применить', ()=>srcApply?.click(),  'primary');
+  btn('Скачать HTML', ()=>srcSave?.click());
+
+  // Добавляем переключатель "Фильтры"
+  const toggle = btn('Фильтры', ()=>{
+    wrap.classList.toggle('filters-collapsed');
+  });
+
+  wrap.prepend(tb);
+
+  /* --- 2) ПОМЕТИМ фильтр-элементы, НЕ двигая их в DOM --- */
+  // Начало области — блок с "Поиск по операторам" (или "Фильтр операторов")
+  const searchInput = $$('input[placeholder]').find(i => /поиск по операторам/i.test(i.placeholder||'')) ||
+                      $$('select, input').find(el => /фильтр операторов/i.test((el.closest('div')?.textContent||'').toLowerCase()));
+
+  // Конец области — "Экспорт всех изменений (CSV)" или "Скачать обновлённый HTML" (ближайшая кнопка вокруг)
+  const endBtn = findBtn(/экспорт всех изменений/i) || findBtn(/скачать обновлённый html/i);
+
+  if (searchInput && endBtn) {
+    // помечаем все узлы между ними классом .filter-part
+    let start = (searchInput.closest('div')||searchInput.parentElement);
+    let end   = endBtn.parentElement;
+    let cur = start;
+    while (cur && cur !== end) {
+      cur.classList?.add('filter-part');
+      cur = cur.nextElementSibling;
+    }
+    if (end) end.classList?.add('filter-part');
+  }
+
+  /* --- 3) Резервное "Скачать HTML" на случай, если штатная кнопка молчит --- */
+  if (srcSave) {
+    srcSave.addEventListener('click', function(){
+      setTimeout(()=>{
+        if (document.querySelector('a[download]')) return; // штатно сработало
+        try {
+          const html = new XMLSerializer().serializeToString(document);
+          const url  = URL.createObjectURL(new Blob([html], {type:'text/html;charset=utf-8'}));
+          const a = document.createElement('a'); a.href=url; a.download='operators_map.html';
+          document.body.appendChild(a); a.click();
+          setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 500);
+        } catch(e){}
+      }, 300);
+    }, true);
+  }
+
+  /* --- 4) Нормализация групп "Оператор: ..." — без изменения DOM --- */
+  function N(s){ return String(s||'').replace(/\u00A0/g,' ').replace(/\s+/g,' ').toLowerCase().trim(); }
+  window.__opIndex = window.__opIndex || {};
+  let map=null; for (const k in window){ const m=window[k]; if (m && m._leaflet_id && m.addLayer){ map=m; break; } }
+  if (map) {
+    document.querySelectorAll('.leaflet-control-layers-overlays label').forEach(lb=>{
+      const txt=(lb.textContent||'').trim();
+      if (/^оператор\s*:|^Оператор\s*:/i.test(txt)) {
+        const key=N(txt);
+        if (!window.__opIndex[key]) window.__opIndex[key] = L.featureGroup().addTo(map);
+      }
+    });
+  }
+})();
+</script>
 </head>
 <body class="">
 <div class="folium-map" id="map_07240632b07852a755665ada692280cf" style="outline: none;"></div>
