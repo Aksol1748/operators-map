@@ -1831,6 +1831,70 @@ if(!window.__opIndex){window.__opIndex={}}; if(!window.__opIndex[key]) window.__
   }
 })();
 </script>
+<!-- ==== SIMPLE DATA LOADER (Leaflet) ==== -->
+<style>
+  /* если у тебя нет стиля для карты — дадим минималку */
+  #map, .folium-map { height: 85vh; width: 100%; }
+  @media (max-width: 900px){ #map, .folium-map { height: 80vh; } }
+</style>
+
+<script>
+const DATA_URL = 'PASTE_YOUR_WEBAPP_URL_HERE'; // <-- вставь сюда твой URL
+
+(async () => {
+  try {
+    // грузим данные (добавляем ?t=… чтобы не кешировалось)
+    const res  = await fetch(DATA_URL + '?t=' + Date.now());
+    const data = await res.json();
+
+    // 1) гарантируем, что есть div для карты
+    let mapDiv = document.getElementById('map') || document.querySelector('.folium-map');
+    if (!mapDiv) {
+      mapDiv = document.createElement('div');
+      mapDiv.id = 'map';
+      document.body.prepend(mapDiv);
+    }
+
+    // 2) создаём карту, если её ещё нет
+    window.map = window.map || L.map(mapDiv).setView([55.75, 37.62], 9);
+    // добавим тайлы, если их нет
+    let hasTiles = false;
+    map.eachLayer(l => { if (l.getAttribution) hasTiles = true; });
+    if (!hasTiles) {
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
+    }
+
+    // 3) рисуем точки
+    const layer = L.layerGroup().addTo(map);
+    data.points.forEach(p => {
+      if (!isFinite(p.lat) || !isFinite(p.lng)) return;
+      L.circleMarker([p.lat, p.lng], {
+        radius: 6, weight: 1, color: '#2d6cdf', fillColor: '#2d6cdf', fillOpacity: 0.85
+      })
+      .bindPopup(
+        `<b>${p.name ?? ''}</b><br>` +
+        `${p.operator ?? ''}` +
+        (p.class ? `<br>Класс: ${p.class}` : '') +
+        (p.freq  ? `<br>Частота: ${p.freq}` : '') +
+        (p.sales ? `<br>Продажи: ${p.sales}` : '')
+      )
+      .addTo(layer);
+    });
+
+    // автоцентр на все точки
+    const coords = data.points.filter(p => isFinite(p.lat) && isFinite(p.lng)).map(p => [p.lat, p.lng]);
+    if (coords.length) map.fitBounds(coords, {padding: [20, 20]});
+
+  } catch (e) {
+    console.error('Ошибка загрузки данных:', e);
+    alert('Не удалось загрузить точки. Проверь URL веб-приложения и открой консоль (F12 → Console).');
+  }
+})();
+</script>
+<!-- ==== /SIMPLE DATA LOADER ==== -->
 
 </body>
         var html = new XMLSerializer().serializeToString(doc);
