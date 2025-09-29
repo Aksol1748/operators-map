@@ -1,298 +1,128 @@
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Карта операторов</title>
+<script>
+  /* ====== ТВОИ CSV-ССЫЛКИ ====== */
+  const OPS_CSV_URL =
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=304610077&single=true&output=csv';
+  const POINTS_CSV_URL =
+    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=0&single=true&output=csv';
+  /* ============================= */
 
-  <!-- Leaflet (можно держать локально, если захочешь) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  const map = L.map('map').setView([55.75, 37.62], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:19, attribution:'© OpenStreetMap' }).addTo(map);
 
-  <!-- PapaParse для CSV -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  const badge = document.getElementById('status-badge');
+  const setBadge = (t, bad=false)=>{ badge.textContent=t; badge.style.background = bad ? '#d33' : '#0b6'; };
 
-  <style>
-    html, body { height:100%; margin:0 }
-    #map { height:100%; width:100% }
+  const groupsByOperator = new Map();
+  const markers = [];
+  let allOperators = [];
 
-    #status-badge{
-      position:fixed; right:12px; top:12px; z-index:5000;
-      padding:8px 10px; border-radius:8px; color:#fff;
-      font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      box-shadow:0 2px 8px rgba(0,0,0,.2); background:#0b6;
-    }
-    #opener{
-      position:fixed; left:12px; top:12px; z-index:5001;
-      padding:8px 12px; background:#2d6cdf; color:#fff; border:none; border-radius:10px;
-      font:14px/1 system-ui; box-shadow:0 2px 8px rgba(0,0,0,.2); cursor:pointer;
-    }
+  const HDR = {
+    id:['id','код'], name:['name','название'],
+    lat:['lat','latitude','широта'], lng:['lng','lon','long','долгота'],
+    operator:['operator','оператор'], class:['class','класс'], freq:['freq','частота'], sales:['sales','продажи']
+  };
+  const toNum = v => (typeof v==='number')?v : (typeof v==='string')? Number(v.replace(',', '.').trim()) : NaN;
 
-    #panel{
-      position:fixed; left:12px; top:56px; bottom:12px; width:300px; z-index:5000;
-      display:none; flex-direction:column; gap:10px;
-      background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px;
-      box-shadow:0 8px 24px rgba(0,0,0,.15);
-    }
-    #panel.show{ display:flex; }
-    #panel h3{ margin:0; font:600 16px/1.1 system-ui; }
-    #search{ width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; font:14px system-ui; }
-    #ops{ flex:1; overflow:auto; border:1px solid #eee; border-radius:8px; padding:8px; }
-    .op-row{ display:flex; align-items:center; gap:8px; padding:4px 0; }
-    .op-row label{ flex:1; cursor:pointer; }
-    .toolbar{ display:flex; gap:8px; }
-    .toolbar button{
-      flex:1; padding:6px 8px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer;
-      font:14px system-ui;
-    }
-    .small{ color:#6b7280; font:12px/1 system-ui; }
-    @media (max-width: 480px){
-      #panel{ width:88vw; left:6vw; }
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <div id="status-badge">Загружаю…</div>
-  <button id="opener">Операторы</button>
-
-  <div id="panel">
-    <h3>Операторы <span id="counts" class="small"></span></h3>
-    <input id="search" type="search" placeholder="Поиск по имени…" />
-    <div class="toolbar">
-      <button id="selectAll">Выбрать всех</button>
-      <button id="clearAll">Снять все</button>
-    </div>
-    <div id="ops"></div>
-    <div class="toolbar"><button id="fitBounds">Показать все видимые</button></div>
-  </div>
-
-  <script>
-    /* ====== ТВОИ CSV-ССЫЛКИ ====== */
-    const OPS_CSV_URL =
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=304610077&single=true&output=csv';
-    const POINTS_CSV_URL =
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=0&single=true&output=csv';
-    /* ============================= */
-
-    // карта
-    const map = L.map('map').setView([55.75, 37.62], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution:'© OpenStreetMap' }).addTo(map);
-
-    const badge = document.getElementById('status-badge');
-    const setBadge = (t,bad=false)=>{ badge.textContent=t; badge.style.background=bad?'#d33':'#0b6'; };
-
-    const groupsByOperator = new Map();
-    const markers = [];
-    let allOperators = [];
-
-    // синонимы заголовков
-    const HDR = {
-      id:       ['id','код','id_точки'],
-      name:     ['name','название','точка'],
-      lat:      ['lat','latitude','широта'],
-      lng:      ['lng','lon','long','долгота'],
-      operator: ['operator','оператор'],
-      class:    ['class','класс'],
-      freq:     ['freq','частота','част.'],
-      sales:    ['sales','продажи','выручка','сумма']
-    };
-
-    const toNum = v => (typeof v === 'number') ? v :
-                       (typeof v === 'string') ? Number(v.replace(',', '.').trim()) : NaN;
-
-    // утилита чтения CSV
-    function loadCSV(url){
-      return new Promise((resolve, reject)=>{
-        const u = url + (url.includes('?')?'&':'?') + 't=' + Date.now(); // no-cache
-        Papa.parse(u, {
-          download:true, header:true, skipEmptyLines:true,
-          complete: res => resolve(res.data),
-          error: err => reject(err)
-        });
-      });
-    }
-
-    // берём значение поля по списку возможных ключей
-    function pick(row, keys){
-      for (const k of keys){
-        if (row.hasOwnProperty(k)) return row[k];
-        const low = k.toLowerCase();
-        for (const rk of Object.keys(row)){
-          if (rk.toLowerCase() === low) return row[rk];
-        }
-      }
-      return '';
-    }
-
-    async function loadData(){
-      // загружаем оба CSV
-      const [opsRows, pointRows] = await Promise.all([ loadCSV(OPS_CSV_URL), loadCSV(POINTS_CSV_URL) ]);
-
-      if (!Array.isArray(opsRows) || !opsRows.length) {
-        console.error('CSV operators пуст/не прочитан', opsRows);
-        throw new Error('Не удалось прочитать CSV с операторами.');
-      }
-      if (!Array.isArray(pointRows) || !pointRows.length) {
-        console.error('CSV points пуст/не прочитан', pointRows);
-        throw new Error('Не удалось прочитать CSV с точками.');
-      }
-
-      // определяем имя колонки оператора в «operators» (operator/оператор)
-      const opKey = Object.keys(opsRows[0]).find(k => /^(operator|оператор)$/i.test(k)) || 'operator';
-
-      const operators = Array.from(new Set(
-        opsRows.map(r => String(r[opKey] ?? '').trim()).filter(Boolean)
-      )).sort((a,b)=>a.localeCompare(b,'ru'));
-
-      const points = pointRows.map(r => ({
-        id:       String(pick(r, HDR.id)       ?? '').trim(),
-        name:     String(pick(r, HDR.name)     ?? '').trim(),
-        lat:      toNum(pick(r, HDR.lat)),
-        lng:      toNum(pick(r, HDR.lng)),
-        operator: String(pick(r, HDR.operator) ?? '').trim(),
-        class:    String(pick(r, HDR.class)    ?? '').trim(),
-        freq:     String(pick(r, HDR.freq)     ?? '').trim(),
-        sales:    String(pick(r, HDR.sales)    ?? '').trim(),
-      })).filter(p => isFinite(p.lat) && isFinite(p.lng));
-
-      return { operators, points };
-    }
-
-    function updateCounts(){
-      const totalOps = allOperators.length;
-      const totalPts = markers.length;
-      let visPts = 0;
-      for (const [, g] of groupsByOperator){
-        if (!g._visible) continue;
-        let n = 0; g.eachLayer(()=>n++);
-        visPts += n;
-      }
-      document.getElementById('counts').textContent = `• операторов: ${totalOps} • точек: ${visPts}/${totalPts}`;
-
-      document.querySelectorAll('.op-row').forEach(row=>{
-        const op = row.dataset.op;
-        const g = groupsByOperator.get(op);
-        const num = row.querySelector('.num');
-        let n = 0; g && g._visible && g.eachLayer(()=>n++);
-        num.textContent = n;
-      });
-    }
-
-    function buildPanel(){
-      const opsWrap = document.getElementById('ops');
-      opsWrap.innerHTML = '';
-      const sorted = allOperators.slice().sort((a,b)=>a.localeCompare(b,'ru'));
-
-      for (const op of sorted){
-        const g = groupsByOperator.get(op);
-        let n = 0; g && g.eachLayer(()=>n++);
-
-        const row = document.createElement('div');
-        row.className = 'op-row';
-        row.dataset.op = op;
-
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = !!(g && g._visible);
-        cb.addEventListener('change', ()=>{
-          if (!g) return;
-          g._visible = cb.checked;
-          if (cb.checked) g.addTo(map); else map.removeLayer(g);
-          updateCounts();
-        });
-
-        const lbl = document.createElement('label');
-        lbl.textContent = op || '(без оператора)';
-
-        const num = document.createElement('span');
-        num.className = 'small num';
-        num.textContent = cb.checked ? n : 0;
-
-        row.appendChild(cb); row.appendChild(lbl); row.appendChild(num);
-        opsWrap.appendChild(row);
-      }
-    }
-
-    function buildLayers(data){
-      const points = Array.isArray(data?.points) ? data.points : [];
-      const ops    = Array.isArray(data?.operators) ? data.operators : [];
-
-      allOperators = ops.slice();
-
-      // группы
-      for (const name of allOperators){
-        if (!groupsByOperator.has(name)){
-          const g = L.layerGroup().addTo(map);
-          g._visible = true;
-          groupsByOperator.set(name, g);
-        }
-      }
-
-      const bounds = [];
-      for (const p of points){
-        const lat = Number(p.lat), lng = Number(p.lng);
-        if (!isFinite(lat) || !isFinite(lng)) continue;
-        const popup =
-          `<b>${p.name ?? ''}</b><br>${p.operator ?? ''}` +
-          (p.class ? `<br>Класс: ${p.class}` : '') +
-          (p.freq  ? `<br>Частота: ${p.freq}` : '') +
-          (p.sales ? `<br>Продажи: ${p.sales}` : '');
-
-        const m = L.circleMarker([lat, lng], {
-          radius: 6, weight: 1, color:'#2d6cdf', fillColor:'#2d6cdf', fillOpacity:.85
-        }).bindPopup(popup);
-
-        markers.push({ marker:m, operator:p.operator ?? '' });
-
-        const g = groupsByOperator.get(p.operator) || groupsByOperator.get('') || (()=>{
-          const tmp = L.layerGroup().addTo(map); tmp._visible = true;
-          groupsByOperator.set('', tmp); return tmp;
-        })();
-
-        m.addTo(g);
-        bounds.push([lat, lng]);
-      }
-
-      if (bounds.length) map.fitBounds(bounds, { padding:[20,20] });
-      updateCounts();
-      buildPanel();
-    }
-
-    // UI
-    document.getElementById('opener').onclick = ()=> document.getElementById('panel').classList.toggle('show');
-    document.getElementById('selectAll').onclick = ()=>{
-      document.querySelectorAll('#ops .op-row input[type=checkbox]').forEach(cb=>{ if (!cb.checked) cb.click(); });
-    };
-    document.getElementById('clearAll').onclick = ()=>{
-      document.querySelectorAll('#ops .op-row input[type=checkbox]').forEach(cb=>{ if (cb.checked) cb.click(); });
-    };
-    document.getElementById('fitBounds').onclick = ()=>{
-      const b=[]; for (const [,g] of groupsByOperator){ if (!g._visible) continue; g.eachLayer(l=>{ if(l.getLatLng) b.push(l.getLatLng()) }); }
-      if (b.length) map.fitBounds(L.latLngBounds(b), {padding:[20,20]});
-    };
-    document.getElementById('search').addEventListener('input', e=>{
-      const q = e.target.value.trim().toLowerCase();
-      document.querySelectorAll('#ops .op-row').forEach(row=>{
-        const name = row.querySelector('label').textContent.toLowerCase();
-        row.style.display = name.includes(q) ? '' : 'none';
-      });
+  function loadCSV(url){
+    return new Promise((resolve,reject)=>{
+      const u = url + (url.includes('?')?'&':'?') + 't=' + Date.now(); // no-cache
+      Papa.parse(u,{download:true,header:true,skipEmptyLines:true,
+        complete:r=>resolve(r.data), error:e=>reject(e)});
     });
+  }
+  const pick = (row,keys)=>{
+    for(const k of keys){
+      if (row.hasOwnProperty(k)) return row[k];
+      const low=k.toLowerCase();
+      for(const rk of Object.keys(row)){ if(rk.toLowerCase()===low) return row[rk]; }
+    }
+    return '';
+  };
 
-    // старт
-    (async ()=>{
-      try{
-        setBadge('Загружаю данные…');
-        const data = await loadData();
-        console.log('CSV OK:', data);
-        setBadge('Данные загружены');
-        buildLayers(data);
-      }catch(err){
-        console.error('Ошибка загрузки CSV:', err);
-        setBadge('Ошибка: ' + (err.message || err), true);
-        alert('Не удалось загрузить данные. Проверь CSV-ссылки и заголовки колонок.');
-      }
-    })();
-  </script>
-</body>
-</html>
+  async function loadData(){
+    const [opsRows, pointRows] = await Promise.all([loadCSV(OPS_CSV_URL), loadCSV(POINTS_CSV_URL)]);
+    console.log('operators CSV sample:', opsRows[0]);
+    console.log('points CSV sample:', pointRows[0]);
+
+    if (!Array.isArray(opsRows) || !opsRows.length) throw new Error('operators.csv пуст');
+    if (!Array.isArray(pointRows) || !pointRows.length) throw new Error('points.csv пуст');
+
+    const opKey = Object.keys(opsRows[0]||{}).find(k=>/^(operator|оператор)$/i.test(k)) || 'operator';
+    const operators = Array.from(new Set(
+      opsRows.map(r => String(r?.[opKey] ?? '').trim()).filter(Boolean)
+    )).sort((a,b)=>a.localeCompare(b,'ru'));
+
+    const points = pointRows.map(r=>({
+      id:String(pick(r,HDR.id)||'').trim(),
+      name:String(pick(r,HDR.name)||'').trim(),
+      lat:toNum(pick(r,HDR.lat)), lng:toNum(pick(r,HDR.lng)),
+      operator:String(pick(r,HDR.operator)||'').trim(),
+      class:String(pick(r,HDR.class)||'').trim(),
+      freq:String(pick(r,HDR.freq)||'').trim(),
+      sales:String(pick(r,HDR.sales)||'').trim()
+    })).filter(p=>isFinite(p.lat)&&isFinite(p.lng));
+
+    return {operators, points};
+  }
+
+  function updateCounts(){
+    let visPts=0, totalPts=markers.length;
+    for(const [,g] of groupsByOperator){ if(!g._visible) continue; let n=0; g.eachLayer(()=>n++); visPts+=n; }
+    document.getElementById('counts').textContent =
+      `• операторов: ${allOperators.length} • точек: ${visPts}/${totalPts}`;
+  }
+
+  function buildPanel(){
+    const wrap = document.getElementById('ops');
+    wrap.innerHTML='';
+    const sorted = allOperators.slice().sort((a,b)=>a.localeCompare(b,'ru'));
+    for(const op of sorted){
+      const g = groupsByOperator.get(op);
+      let n=0; g && g.eachLayer(()=>n++);
+      const row=document.createElement('div'); row.className='op-row'; row.dataset.op=op;
+      const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!(g&&g._visible);
+      cb.onchange=()=>{ if(!g) return; g._visible=cb.checked; cb.checked?g.addTo(map):map.removeLayer(g); updateCounts(); };
+      const lbl=document.createElement('label'); lbl.textContent=op||'(без оператора)';
+      const num=document.createElement('span'); num.className='small num'; num.textContent = cb.checked?n:0;
+      row.append(cb,lbl,num); wrap.appendChild(row);
+    }
+  }
+
+  function buildLayers({operators,points}){
+    allOperators = operators.slice();
+    for(const name of allOperators){
+      if(!groupsByOperator.has(name)){ const g=L.layerGroup().addTo(map); g._visible=true; groupsByOperator.set(name,g); }
+    }
+    const bounds=[];
+    for(const p of points){
+      const m=L.circleMarker([p.lat,p.lng],{radius:6,weight:1,color:'#2d6cdf',fillColor:'#2d6cdf',fillOpacity:.85})
+              .bindPopup(`<b>${p.name||''}</b><br>${p.operator||''}`);
+      const g = groupsByOperator.get(p.operator) || groupsByOperator.get('') || (()=>{const t=L.layerGroup().addTo(map); t._visible=true; groupsByOperator.set('',t); return t;})();
+      m.addTo(g); markers.push({marker:m,operator:p.operator||''}); bounds.push([p.lat,p.lng]);
+    }
+    if(bounds.length) map.fitBounds(bounds,{padding:[20,20]});
+    updateCounts(); buildPanel();
+  }
+
+  // UI
+  document.getElementById('opener').onclick=()=>document.getElementById('panel').classList.toggle('show');
+  document.getElementById('selectAll').onclick=()=>document.querySelectorAll('#ops .op-row input[type=checkbox]').forEach(cb=>{ if(!cb.checked) cb.click(); });
+  document.getElementById('clearAll').onclick=()=>document.querySelectorAll('#ops .op-row input[type=checkbox]').forEach(cb=>{ if(cb.checked) cb.click(); });
+  document.getElementById('fitBounds').onclick=()=>{ const b=[]; for(const [,g] of groupsByOperator){ if(!g._visible) continue; g.eachLayer(l=>{ if(l.getLatLng) b.push(l.getLatLng()); }); } if(b.length) map.fitBounds(L.latLngBounds(b),{padding:[20,20]}); };
+  document.getElementById('search').oninput=e=>{ const q=e.target.value.trim().toLowerCase(); document.querySelectorAll('#ops .op-row').forEach(row=>{ row.style.display = row.querySelector('label').textContent.toLowerCase().includes(q)?'':''; }); };
+
+  // Старт с диагностикой
+  (async()=>{
+    try{
+      setBadge('Загружаю CSV…');
+      const data = await loadData();
+      setBadge(`Прочитано: операторов ${data.operators.length}, строк точек ${data.points.length}`);
+      if(!data.points.length) setBadge('Точек 0 — проверь lat/lng и заголовки', true);
+      buildLayers(data);
+    }catch(err){
+      console.error(err);
+      setBadge('Ошибка загрузки CSV (детали в консоли)', true);
+      alert('Не удалось загрузить данные. Проверь CSV-ссылки и заголовки колонок.');
+    }
+  })();
+</script>
