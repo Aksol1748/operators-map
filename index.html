@@ -1,102 +1,13 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Operators Map</title>
-
-  <!-- Leaflet -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
-  />
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-    crossorigin=""
-  ></script>
-
-  <!-- PapaParse для устойчивого CSV -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <style>
-    html, body { height: 100%; margin: 0; }
-    #map { position: absolute; inset: 0; }
-
-    /* Плашка статуса */
-    .status-badge {
-      position: absolute; top: 8px; right: 8px; z-index: 1000;
-      background: rgba(0,0,0,.75); color: #fff; padding: 6px 10px;
-      border-radius: 12px; font: 500 13px/1.2 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      backdrop-filter: blur(3px);
-    }
-
-    /* Кнопка свёртки фильтров (мобила) */
-    .filters-toggle {
-      position: absolute; top: 8px; left: 8px; z-index: 1001;
-      background: #fff; border: 1px solid #ddd; border-radius: 10px;
-      padding: 8px 10px; font: 600 13px system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,.12);
-    }
-
-    /* Панель фильтров */
-    aside#filters {
-      position: absolute; top: 52px; left: 8px; z-index: 1000;
-      width: 280px; max-width: calc(100vw - 16px); max-height: calc(100vh - 60px);
-      overflow: auto; background: #fff; border: 1px solid #ddd; border-radius: 14px;
-      box-shadow: 0 6px 24px rgba(0,0,0,.15); padding: 10px;
-      font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-    }
-    #filters h3 { margin: 4px 6px 8px; font-size: 14px; }
-    #filters .muted { color: #666; font-size: 12px; margin-left: 6px; }
-    #filters .search { margin: 6px; }
-    #filters .search input {
-      width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 8px;
-    }
-    #opsList { list-style: none; margin: 8px 6px 10px; padding: 0; }
-    #opsList li { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
-    .swatch {
-      width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,.2);
-      flex: 0 0 14px;
-    }
-    .count { margin-left: auto; color: #888; font-size: 12px; }
-
-    /* Адаптация для мобильных: панель скрыта по умолчанию */
-    @media (max-width: 768px) {
-      aside#filters {
-        transform: translateX(-110%); transition: transform .25s ease;
-      }
-      aside#filters.open {
-        transform: translateX(0);
-      }
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-
-  <div class="status-badge" id="statusBadge">Загрузка…</div>
-  <button class="filters-toggle" id="filtersToggle">Фильтры</button>
-
-  <aside id="filters" aria-label="Фильтры по операторам">
-    <h3>Операторы <span class="muted" id="operatorsCount">0</span></h3>
-    <div class="search"><input id="opSearch" placeholder="Поиск оператора…" /></div>
-    <ul id="opsList"></ul>
-  </aside>
-
 <script>
 (() => {
-  // ======= Настройки источников =======
+  // ======= Источники (оставил ваши) =======
   const POINTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=0&single=true&output=csv";
   const OPERATORS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=304610077&single=true&output=csv";
 
-  // ======= Диагностическая плашка =======
   const badge = document.getElementById('statusBadge');
-  const setBadge = (msg) => { badge.textContent = msg; };
+  const setBadge = (msg) => { if (badge) badge.textContent = msg; };
 
-  // ======= Карта =======
+  // ======= Карта (без изменений) =======
   const map = L.map('map', { zoomControl: true }).setView([55.75, 37.62], 9);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '&copy; OpenStreetMap'
@@ -106,40 +17,62 @@
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const addCacheBuster = (url) => url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
 
-  async function fetchWithRetry(url, { timeout = 12000, retries = 2 } = {}) {
-    let err;
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeout);
-        const res = await fetch(addCacheBuster(url), {
-          signal: controller.signal,
-          cache: 'no-store',
-          credentials: 'omit',
-          redirect: 'follow',
-        });
-        clearTimeout(timer);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return await res.text();
-      } catch (e) {
-        err = e;
-        console.warn(`[fetchWithRetry] ${url} attempt ${attempt+1} failed:`, e);
-        await sleep(400 * (attempt + 1));
-      }
+  // «Умная» декодировка текста
+  async function decodeSmart(res) {
+    const buf = await res.arrayBuffer();
+    let txt = new TextDecoder('utf-8').decode(buf);
+    const bads = (txt.match(/\uFFFD/g) || []).length;
+    if (bads > 8) { // много � — попробуем CP1251
+      try { txt = new TextDecoder('windows-1251').decode(buf); } catch {}
     }
-    throw err;
+    return txt;
   }
 
-  const num = (v) => {
-    if (v == null) return NaN;
-    if (typeof v === 'number') return v;
-    if (typeof v !== 'string') return Number(v);
-    // поддержка "55,1234"
-    return Number(v.replace(',', '.').trim());
-  };
+  // Жёсткий fetch с таймаутом
+  async function hardFetch(url, { timeout = 12000 } = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const res = await fetch(addCacheBuster(url), {
+      signal: controller.signal,
+      mode: 'cors',
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'follow',
+      referrerPolicy: 'no-referrer'
+    });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return decodeSmart(res);
+  }
 
+  // Фолбэк-цепочка: прямой → прокси A → прокси B
+  async function fetchCsvResilient(url) {
+    const chain = [
+      url,
+      'https://cors.isomorphic-git.org/' + url,
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    ];
+
+    let lastErr = null;
+    for (let i = 0; i < chain.length; i++) {
+      const u = chain[i];
+      try {
+        setBadge(`Загрузка CSV (${i+1}/${chain.length})…`);
+        const text = await hardFetch(u);
+        console.info('[CSV OK]', u, text.slice(0, 120));
+        return text;
+      } catch (e) {
+        lastErr = e;
+        console.warn('[CSV FAIL]', u, e);
+        setBadge(`Не вышло: ${i+1}/${chain.length} — пробуем ещё…`);
+        await sleep(300 * (i + 1));
+      }
+    }
+    throw lastErr;
+  }
+
+  const num = (v) => typeof v === 'string' ? Number(v.replace(',', '.').trim()) : Number(v);
   const norm = (s) => (s ?? '').toString().trim();
-
   function detectColumn(keys, candidates) {
     const lower = keys.map(k => k.toLowerCase());
     for (const c of candidates) {
@@ -149,31 +82,29 @@
     return null;
   }
 
-  // Цвета по умолчанию, если нет в справочнике
-  const palette = [
-    "#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4",
-    "#46f0f0","#f032e6","#bcf60c","#fabebe","#008080","#e6beff",
-    "#9A6324","#fffac8","#800000","#aaffc3","#808000","#ffd8b1",
-    "#000075","#808080","#000000"
-  ];
-  let paletteIdx = 0;
-  const nextColor = () => palette[(paletteIdx++) % palette.length];
+  const palette = ["#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6",
+                   "#bcf60c","#fabebe","#008080","#e6beff","#9A6324","#fffac8","#800000","#aaffc3",
+                   "#808000","#ffd8b1","#000075","#808080","#000000"];
+  let paletteIdx = 0; const nextColor = () => palette[(paletteIdx++) % palette.length];
 
   // ======= Главный поток =======
   (async function init() {
     try {
       setBadge('Грузим CSV…');
-
       const [pointsCsv, opsCsv] = await Promise.all([
-        fetchWithRetry(POINTS_URL),
-        fetchWithRetry(OPERATORS_URL),
+        fetchCsvResilient(POINTS_URL),
+        fetchCsvResilient(OPERATORS_URL),
       ]);
 
-      // Парсим
-      const pointsRaw = Papa.parse(pointsCsv, { header: true, skipEmptyLines: true }).data;
-      const opsRaw = Papa.parse(opsCsv, { header: true, skipEmptyLines: true }).data;
+      // Парсим через Papa
+      const pointsParsed = Papa.parse(pointsCsv, { header: true, skipEmptyLines: true });
+      const opsParsed = Papa.parse(opsCsv, { header: true, skipEmptyLines: true });
 
-      // Автоопределение колонок
+      const pointsRaw = pointsParsed.data || [];
+      const opsRaw = opsParsed.data || [];
+      if (!pointsRaw.length) throw new Error('CSV точек пустой или не распознан');
+      console.info('[Parsed]', { points: pointsRaw.length, ops: opsRaw.length });
+
       const pointKeys = Object.keys(pointsRaw[0] || {});
       const opKeys    = Object.keys(opsRaw[0] || {});
 
@@ -184,85 +115,62 @@
 
       if (!latKey || !lngKey) {
         console.error('Колонки координат не найдены. Доступные ключи:', pointKeys);
-        setBadge('Ошибка: нет колонок lat/lng');
+        setBadge('Ошибка: нет колонок lat/lng в CSV');
         return;
       }
 
-      // Справочник операторов: name -> color (попробуем разные поля)
       const opNameKey = detectColumn(opKeys, ['operator','оператор','name','имя','ФИО']);
       const opColorKey = detectColumn(opKeys, ['color','цвет','hex','код']);
-
       const operatorColors = new Map();
       if (opsRaw.length && opNameKey) {
         for (const row of opsRaw) {
-          const name = norm(row[opNameKey]);
-          if (!name) continue;
+          const name = norm(row[opNameKey]); if (!name) continue;
           const color = opColorKey ? norm(row[opColorKey]) : '';
           operatorColors.set(name, color || nextColor());
         }
       }
 
-      // Подготовка слоёв
       const layersByOperator = new Map();
       const countsByOperator = new Map();
       const allMarkers = [];
-
       function layerFor(opName) {
-        if (!layersByOperator.has(opName)) {
-          layersByOperator.set(opName, L.layerGroup().addTo(map));
-        }
+        if (!layersByOperator.has(opName)) layersByOperator.set(opName, L.layerGroup().addTo(map));
         return layersByOperator.get(opName);
       }
 
-      // Создаём точки
       let ok = 0, bad = 0;
       for (const r of pointsRaw) {
-        const lat = num(r[latKey]);
-        const lng = num(r[lngKey]);
+        const lat = num(r[latKey]), lng = num(r[lngKey]);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) { bad++; continue; }
-
         const op = norm(r[operatorKey]) || 'Без оператора';
         const title = norm(r[nameKey]) || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-
-        // Цвет маркера
         if (!operatorColors.has(op)) operatorColors.set(op, nextColor());
         const color = operatorColors.get(op);
-
         const marker = L.circleMarker([lat, lng], {
-          radius: 7, weight: 2, opacity: 1,
-          color: '#222', fillColor: color, fillOpacity: 0.85
+          radius: 7, weight: 2, opacity: 1, color: '#222', fillColor: color, fillOpacity: 0.85
         }).bindPopup(`<b>${title}</b><br>${op}`);
-
         layerFor(op).addLayer(marker);
         allMarkers.push(marker);
-
         countsByOperator.set(op, (countsByOperator.get(op) || 0) + 1);
         ok++;
       }
 
-      // Фит к видимым
       if (allMarkers.length) {
         const group = L.featureGroup(allMarkers);
         map.fitBounds(group.getBounds().pad(0.2));
       }
 
-      // Обновляем статус
-      const uniqueOps = [...countsByOperator.keys()];
+      const uniqueOps = [...countsByOperator.keys()].sort((a,b)=>(countsByOperator.get(b)||0)-(countsByOperator.get(a)||0));
       setBadge(`${uniqueOps.length} операторов • ${ok} точек${bad ? ` • пропусков: ${bad}` : ''}`);
 
       // Рисуем фильтры
       const opsListEl = document.getElementById('opsList');
       const operatorsCountEl = document.getElementById('operatorsCount');
-      operatorsCountEl.textContent = uniqueOps.length;
+      if (operatorsCountEl) operatorsCountEl.textContent = uniqueOps.length;
 
-      // Сортировка: по числу точек у оператора
-      uniqueOps.sort((a,b) => (countsByOperator.get(b)||0) - (countsByOperator.get(a)||0));
-
-      // Чекбоксы + слои
       for (const op of uniqueOps) {
         const color = operatorColors.get(op) || '#999';
         const count = countsByOperator.get(op) || 0;
-
         const li = document.createElement('li');
         li.innerHTML = `
           <input type="checkbox" id="op_${btoa(op)}" checked />
@@ -279,7 +187,6 @@
         opsListEl.appendChild(li);
       }
 
-      // Поиск по операторам
       document.getElementById('opSearch').addEventListener('input', (e) => {
         const q = e.target.value.toLowerCase().trim();
         for (const li of opsListEl.querySelectorAll('li')) {
@@ -288,20 +195,15 @@
         }
       });
 
-      console.info('[map] Loaded:', { points_ok: ok, skipped: bad, operators: uniqueOps.length });
     } catch (e) {
-      console.error('Критическая ошибка загрузки:', e);
+      console.error('Критическая ошибка загрузки CSV:', e);
       setBadge('Ошибка загрузки CSV (см. console)');
     }
   })();
 
-  // Сворачивание панели (мобила)
+  // Сворачивание панели (мобила — как было)
   const filters = document.getElementById('filters');
   const toggleBtn = document.getElementById('filtersToggle');
-  toggleBtn.addEventListener('click', () => {
-    filters.classList.toggle('open');
-  });
+  toggleBtn?.addEventListener('click', () => filters.classList.toggle('open'));
 })();
 </script>
-</body>
-</html>
