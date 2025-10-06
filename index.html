@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ASPGroupMap — стабильные и настраиваемые цвета</title>
+  <title>ASPGroupMap — управление цветами</title>
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
@@ -16,24 +16,21 @@
     body.filters-closed aside#filters { transform: translateX(-110%); }
     #filters h3{margin:4px 6px 6px; font-size:14px; position: sticky; top:0; background:#fff; z-index:3; padding-top:6px;}
     #filters .muted{color:#666; font-size:12px; margin-left:6px;}
-
     .view-toggle{display:flex; gap:10px; align-items:center; padding:6px; position: sticky; top:28px; background:#fff; z-index:3;}
     .view-toggle label{display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;}
-
     .tabs{display:flex; gap:6px; padding:6px; position: sticky; top:60px; background:#fff; z-index:2;}
     .tabs button{flex:1 1 50%; padding:6px 8px; border:1px solid #ddd; background:#f7f7f7; border-radius:8px; font:600 12px; cursor:pointer;}
     .tabs button.active{background:#fff; border-color:#bbb;}
-
     .toolbar{display:flex; gap:8px; margin:4px 6px 6px; position: sticky; top:92px; background:#fff; z-index:2; padding-bottom:6px;}
     .toolbar button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; font:600 12px; cursor:pointer;}
     .toolbar .secondary{background:#fff;}
 
     #opsList, #techList{list-style:none; margin:8px 6px 10px; padding:0;}
     #opsList li, #techList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
-    .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px;}
+    .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px; cursor:pointer; position:relative;}
     .swatch.tri{border-radius:3px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%);}
+    .swatch input[type="color"]{position:absolute; inset:0; opacity:0; cursor:pointer;}
     .count{margin-left:auto; color:#888; font-size:12px;}
-
     .fatal {position:absolute; left:8px; right:8px; bottom:8px; z-index:10002; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);}
     .leaflet-control-attribution a[href*="leafletjs.com"]{ display:none !important; }
   </style>
@@ -73,14 +70,14 @@
   window.btoa = function(s){ try { return native ? native(s) : ''; } catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; } };
 })();
 
-/* === Док и листы === */
+/* ── Конфиг источников ────────────────────────────────────────────────────── */
 const DOC_ID = "2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const POINTS_PUB = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=0&single=true&output=csv`;
 const POINTS_EXP = `https://docs.google.com/spreadsheets/d/${DOC_ID}/export?format=csv&id=${DOC_ID}&gid=0`;
 const OPER_PUB   = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=304610077&single=true&output=csv`;
 const OPER_EXP   = `https://docs.google.com/spreadsheets/d/${DOC_ID}/export?format=csv&id=${DOC_ID}&gid=304610077`;
 
-/* UI helpers */
+/* ── Утилиты UI/загрузки ──────────────────────────────────────────────────── */
 const badge = document.getElementById('statusBadge');
 const setBadge = (msg) => badge.textContent = msg;
 function showFatal(title, links){
@@ -95,7 +92,6 @@ function showFatal(title, links){
   d.innerHTML = html; document.body.appendChild(d);
 }
 
-/* === Мульти-CDN === */
 function addBuster(u){ return u + (u.includes('?')?'&':'?') + 'v=' + Date.now(); }
 async function loadStyleChain(list){ let last=null; for(const href of list){ try{ await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=addBuster(href);l.onload=res;l.onerror=()=>rej(new Error(href));document.head.appendChild(l);}); return; }catch(e){ last=e; } } throw last||new Error('CSS fail'); }
 async function loadScriptChain(list){ let last=null; for(const src of list){ try{ await new Promise((res,rej)=>{const s=document.createElement('script');s.src=addBuster(src);s.async=true;s.onload=res;s.onerror=()=>rej(new Error(src));document.head.appendChild(s);}); return; }catch(e){ last=e; } } throw last||new Error('JS fail'); }
@@ -118,24 +114,20 @@ await loadScriptChain([
 ]);
 if(!window.L || !window.Papa){ showFatal('Не загрузились Leaflet/PapaParse.'); throw new Error('libs-missing'); }
 
-/* === Карта + pane'ы === */
+/* ── Карта и pane ─────────────────────────────────────────────────────────── */
 const map = L.map('map', { attributionControl: false }).setView([55.75,37.62],9);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(map);
 L.control.attribution({prefix:false}).addTo(map);
-
-/* два отдельных pane: техники ниже, операторы выше */
 map.createPane('techPane');  map.getPane('techPane').style.zIndex = 430;
 map.createPane('opPane');    map.getPane('opPane').style.zIndex   = 450;
 
-/* === Резильентная загрузка CSV === */
+/* ── Загрузка CSV (с прокси и таймаутами) ─────────────────────────────────── */
 const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
 function proxyChain(url){
-  return [
-    addBuster(url),
+  return [ addBuster(url),
     'https://r.jina.ai/http/' + url.replace(/^https?:\/\//,''),
     'https://cors.isomorphic-git.org/' + url,
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)
-  ];
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) ];
 }
 async function fetchCsvMany(urls, label){
   let lastErr=null;
@@ -156,14 +148,19 @@ async function fetchCsvMany(urls, label){
   throw lastErr || new Error('CSV load failed');
 }
 
-/* === Утилиты === */
+/* ── Мелкие утилиты ───────────────────────────────────────────────────────── */
 const num  = (v)=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm = (s)=> (s??'').toString().trim();
 function detect(keys, cands){ const lower=keys.map(k=>k.toLowerCase()); for(const c of cands){ const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; } for(const k of keys){ const lk=k.toLowerCase(); if(cands.some(c=>lk.includes(c.toLowerCase()))) return k; } return null; }
 const safeId = (str)=> 'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
 const splitMany = (s)=> norm(s).split(/[,\|;/]/).map(x=>x.trim()).filter(Boolean);
 
-/* === Стабильные яркие цвета === */
+/* ── Стабильные автоцвета + LocalStorage ──────────────────────────────────── */
+const LS_KEY = 'operators-map:colors';
+function loadSaved(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch{ return {}; } }
+function saveColors(obj){ localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
+const savedColors = loadSaved();
+
 function djb2(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h) + str.charCodeAt(i); h|=0; } return Math.abs(h); }
 function hslToHex(h,s,l){
   h/=360; s/=100; l/=100;
@@ -175,24 +172,24 @@ function hslToHex(h,s,l){
   const b = Math.round(255*hue2rgb(p,q,h-1/3));
   return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
-function colorFromName(name){
-  const h = djb2(name.toLowerCase());
-  const hue = h % 360;                 // 0..359 — радуга
-  const sat = 55 + (h % 30);           // 55..85 — разные насыщенности
-  const lig = 45 + (Math.floor(h/7)%20); // 45..64 — разные светлоты
+function autoColor(key){
+  const h = djb2(key.toLowerCase());
+  const hue = h % 360;
+  const sat = 55 + (h % 30);
+  const lig = 45 + (Math.floor(h/7)%20);
   return hslToHex(hue, sat, lig);
 }
-
-/* === Парсинг цветов техников === */
-function parseTechToken(token, fallbackColor){
-  const hexMatch = token.match(/#([0-9A-Fa-f]{6})\b/);
-  const color = hexMatch ? ('#' + hexMatch[1]) : fallbackColor;
-  const name = token.replace(/#([0-9A-Fa-f]{6})\b/g,'').replace(/\|/g,'').trim();
-  return { name, color };
+function getColor(kind, name, fallback){
+  const key=`${kind}:${name}`;
+  return savedColors[key] || fallback || autoColor(key);
+}
+function setColor(kind, name, hex){
+  savedColors[`${kind}:${name}`]=hex;
+  saveColors(savedColors);
 }
 
-/* === Глобальное состояние === */
-const ST = { opLayers:new Map(), opCounts:new Map(), opList:[], techLayers:new Map(), techCounts:new Map(), techList:[] };
+/* ── Состояние ────────────────────────────────────────────────────────────── */
+const ST = { opLayers:new Map(), opCounts:new Map(), opList:[], techLayers:new Map(), techCounts:new Map(), techList:[], opColors:new Map(), techColors:new Map() };
 function layerFor(mapObj, name){ if(!mapObj.has(name)) mapObj.set(name, L.layerGroup().addTo(map)); return mapObj.get(name); }
 function getVisibleBounds(){
   const groups=[];
@@ -204,14 +201,19 @@ function getVisibleBounds(){
 }
 function animateToVisible(){ const b=getVisibleBounds(); if(b && b.isValid()) map.flyToBounds(b.pad(0.2),{duration:0.8,easeLinearity:0.25}); }
 
-/* === Маркеры === */
+/* ── Иконка треугольника ──────────────────────────────────────────────────── */
 function triangleMarker(latlng, color){
   const svg = `<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
   const icon = L.divIcon({ html: svg, className:'', iconSize:[22,22], iconAnchor:[11,18] });
   return L.marker(latlng,{ icon, pane:'techPane' });
 }
+function recolorTriangleMarker(marker, color){
+  const el = marker.getElement();
+  if(el){ const svg = el.querySelector('polygon'); if(svg) svg.setAttribute('fill', color); }
+}
 
+/* ── Загрузка и отрисовка ─────────────────────────────────────────────────── */
 try{
   const pointsCsv = await fetchCsvMany([POINTS_PUB, POINTS_EXP], 'точек');
   const opsCsv    = await fetchCsvMany([OPER_PUB,   OPER_EXP],   'операторов');
@@ -228,7 +230,6 @@ try{
   const nameKey  = detect(pKeys,['name','название','локация','адрес']);
   const opKey    = detect(pKeys,['operator','оператор','отв.пользователь']);
   const techKey  = detect(pKeys,['technician','tech','тех']);
-  const techColorKey = detect(pKeys,['technician_color','tech_color','техцвет','тех.цвет']);
 
   const opNameKey = detect(oKeys,['operator','оператор','фио','name']);
   const opColorKey= detect(oKeys,['color','цвет','hex']);
@@ -238,39 +239,44 @@ try{
     throw new Error('no lat/lng');
   }
 
-  /* Операторы: берем цвет из листа (если есть), иначе — стабильный по имени */
-  const opColors = new Map();
+  // Операторы: цвет из листа (если есть), затем из localStorage/авто
+  const sheetOpColor = new Map();
   for(const row of ops){
     const n = norm(row[opNameKey]); if(!n) continue;
     const fromSheet = norm(row[opColorKey]);
-    opColors.set(n, fromSheet || colorFromName(n));
+    if(fromSheet) sheetOpColor.set(n, fromSheet);
   }
 
-  /* Техники: поддержка inline-цвета и отдельной колонки цветов */
   let ok=0,bad=0; const all=[];
+  const opsByName=new Map(); const techByName=new Map(); // для быстрого перекраса
+
   for(const r of points){
     const lat=num(r[latKey]), lng=num(r[lngKey]);
     if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
     const title = norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-    // техсписок + возможные цвета
-    const techTokens = techKey ? splitMany(r[techKey]) : [];
-    const techColorsList = techColorKey ? splitMany(r[techColorKey]) : [];
-    techTokens.forEach((tkn, idx)=>{
-      const fallback = techColorsList[idx] && /^#[0-9A-Fa-f]{6}$/.test(techColorsList[idx]) ? techColorsList[idx] : colorFromName('tech:'+tkn);
-      const {name: tName, color: tColor} = parseTechToken(tkn, fallback);
-      const tm = triangleMarker([lat,lng], tColor).bindPopup(`<b>${title}</b><br>Техник: ${tName}`);
-      layerFor(ST.techLayers, tName).addLayer(tm);
-      ST.techCounts.set(tName,(ST.techCounts.get(tName)||0)+1); all.push(tm);
-    });
+    // техники
+    if(techKey){
+      const techs = splitMany(r[techKey]);
+      for(const t of techs){
+        if(!t) continue;
+        const color = getColor('tech', t, autoColor('tech:'+t));
+        const m = triangleMarker([lat,lng], color).bindPopup(`<b>${title}</b><br>Техник: ${t}`);
+        layerFor(ST.techLayers, t).addLayer(m);
+        (techByName.get(t) || techByName.set(t,[]), techByName.get(t)).push(m);
+        ST.techCounts.set(t,(ST.techCounts.get(t)||0)+1); all.push(m);
+      }
+    }
 
-    // оператор
+    // операторы
     const op = norm(r[opKey]) || 'Без оператора';
-    const col = opColors.get(op) || colorFromName(op);
-    const cm = L.circleMarker([lat,lng],{ pane:'opPane', radius:7, weight:2, color:'#222', fillColor:col, fillOpacity:.9 })
+    const base = sheetOpColor.get(op) || autoColor(op);
+    const color = getColor('op', op, base);
+    const m = L.circleMarker([lat,lng],{ pane:'opPane', radius:7, weight:2, color:'#222', fillColor:color, fillOpacity:.9 })
       .bindPopup(`<b>${title}</b><br>Оператор: ${op}`);
-    layerFor(ST.opLayers, op).addLayer(cm);
-    ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1); all.push(cm); ok++;
+    layerFor(ST.opLayers, op).addLayer(m);
+    (opsByName.get(op) || opsByName.set(op,[]), opsByName.get(op)).push(m);
+    ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1); all.push(m); ok++;
   }
 
   if(all.length){ const g=L.featureGroup(all); map.fitBounds(g.getBounds().pad(0.2)); }
@@ -282,20 +288,60 @@ try{
     `${ST.opList.length} операторов • ${ST.techList.length} техников • ${ok} точек${bad?` • пропусков:${bad}`:''}`;
   setBadge(`${ST.opList.length} операторов • ${ST.techList.length} техников • ${ok} точек`);
 
-  /* списки + чекбоксы (все включены по элементам, но группы управляют видимостью) */
+  /* ── списки с цветопикером ─────────────────────────────────────────────── */
   const opsList = document.getElementById('opsList');
   const techList= document.getElementById('techList');
+
+  function mountColorSwatch(div, kind, name, initColor){
+    div.style.background = initColor;
+    const input = document.createElement('input');
+    input.type = 'color'; input.value = /^#[0-9A-Fa-f]{6}$/.test(initColor)?initColor:'#888888';
+    div.appendChild(input);
+
+    // обычный клик — открыть пикер. Alt-клик — сброс цвета.
+    div.addEventListener('click', (e)=>{
+      if(e.altKey){
+        const fallback = kind==='op' ? (sheetOpColor.get(name) || autoColor(name))
+                                     : autoColor('tech:'+name);
+        setColor(kind, name, undefined); delete savedColors[`${kind}:${name}`]; saveColors(savedColors);
+        applyColor(kind, name, fallback);
+        input.value = fallback; div.style.background = fallback;
+      }else{
+        input.click();
+      }
+    });
+    input.addEventListener('input', ()=>{
+      const hex = input.value;
+      setColor(kind, name, hex);
+      applyColor(kind, name, hex);
+      div.style.background = hex;
+    });
+  }
+
+  function applyColor(kind, name, hex){
+    if(kind==='op'){
+      const arr = opsByName.get(name)||[];
+      arr.forEach(m=>m.setStyle({fillColor:hex}));
+    }else{
+      const arr = techByName.get(name)||[];
+      arr.forEach(m=>recolorTriangleMarker(m, hex));
+    }
+  }
 
   function addRow(targetUl, kind, name, color, count, initiallyChecked){
     const id = safeId(`${kind}:${name}`);
     const sw = kind==='tech' ? 'swatch tri' : 'swatch';
     const li = document.createElement('li');
     li.innerHTML = `<input type="checkbox" id="${id}">
-      <span class="${sw}" style="background:${color}"></span>
+      <span class="${sw}"></span>
       <label for="${id}">${name}</label>
       <span class="count">${count}</span>`;
     const cb = li.querySelector('input');
     cb.checked = initiallyChecked;
+
+    // смонтировать цветопикер
+    const swatch = li.querySelector('.'+sw.split(' ')[0]);
+    mountColorSwatch(swatch, kind, name, color);
 
     const mapObj = (kind==='tech') ? ST.techLayers : ST.opLayers;
     const groupOn = (kind==='tech') ? document.getElementById('toggleTech').checked
@@ -313,8 +359,15 @@ try{
   }
 
   const INIT_ITEM_CHECKED = true;
-  for(const op of ST.opList)  addRow(opsList,  'op',   op,  (opColors.get(op)||colorFromName(op)), ST.opCounts.get(op)||0,  INIT_ITEM_CHECKED);
-  for(const t  of ST.techList)addRow(techList, 'tech', t,  colorFromName('tech:'+t),               ST.techCounts.get(t)||0, INIT_ITEM_CHECKED);
+  for(const op of ST.opList){
+    const base = sheetOpColor.get(op) || autoColor(op);
+    const color = getColor('op', op, base);
+    addRow(opsList, 'op', op, color, ST.opCounts.get(op)||0, INIT_ITEM_CHECKED);
+  }
+  for(const t of ST.techList){
+    const color = getColor('tech', t, autoColor('tech:'+t));
+    addRow(techList, 'tech', t, color, ST.techCounts.get(t)||0, INIT_ITEM_CHECKED);
+  }
 
   /* верхние переключатели групп */
   const toggleOps  = document.getElementById('toggleOps');
@@ -358,8 +411,7 @@ try{
     for(const name of list){
       const id=safeId(pref+name), cb=document.getElementById(id);
       if(cb && !cb.checked){
-        cb.checked=true;
-        if(groupOn) mapObj.get(name).addTo(map);
+        cb.checked=true; if(groupOn) mapObj.get(name).addTo(map);
       }
     }
     animateToVisible();
