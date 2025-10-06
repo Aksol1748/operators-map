@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ASPGroupMap — маршруты</title>
+  <title>ASPGroupMap — маршруты по дорогам</title>
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
@@ -93,30 +93,31 @@
         <button id="btnDownload" disabled>Скачать CSV</button>
       </div>
       <div id="routeMeta" class="route-meta">Маршрут не построен.</div>
+      <div class="route-meta">⚠️ Сейчас: по дорогам, без пробок (OSRM). Для ETA с пробками — подключим Mapbox/Яндекс.</div>
     </div>
   </aside>
 
   <noscript>Нужен JavaScript</noscript>
 
 <script type="module">
-/* страховка btoa */
+/* btoa-страховка */
 (function(){ const native = window.btoa ? window.btoa.bind(window) : null;
   window.btoa = function(s){ try { return native ? native(s) : ''; } catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; } };
 })();
 
-/* ── ИСТОЧНИКИ ДАННЫХ ─────────────────────────────────────────────────────── */
+/* ── Источники данных ────────────────────────────────────────────────────── */
 const DOC_ID = "2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const POINTS_PUB = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=0&single=true&output=csv`;
 const POINTS_EXP = `https://docs.google.com/spreadsheets/d/${DOC_ID}/export?format=csv&id=${DOC_ID}&gid=0`;
 const OPER_PUB   = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=304610077&single=true&output=csv`;
 const OPER_EXP   = `https://docs.google.com/spreadsheets/d/${DOC_ID}/export?format=csv&id=${DOC_ID}&gid=304610077`;
 
-/* ── СИНХР ЦВЕТОВ (вставь свой /exec) ─────────────────────────────────────── */
+/* ── Синхрон цвета (твоя ссылка сохранена) ──────────────────────────────── */
 const COLOR_SYNC_URL = 'https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0zQ/exec';
 const ENABLE_SYNC = !!COLOR_SYNC_URL && COLOR_SYNC_URL.startsWith('http');
 const COLOR_SYNC_GET = ENABLE_SYNC ? 'https://r.jina.ai/http/' + COLOR_SYNC_URL.replace(/^https?:\/\//,'') : '';
 
-/* ── UI/библиотеки ────────────────────────────────────────────────────────── */
+/* ── UI/библиотеки ───────────────────────────────────────────────────────── */
 const badge = document.getElementById('statusBadge');
 const setBadge = (m)=>badge.textContent=m;
 function showFatal(title, links){
@@ -140,14 +141,14 @@ await loadScriptChain(['https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.
 await loadScriptChain(['https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js','https://unpkg.com/papaparse@5.4.1/papaparse.min.js']);
 if(!window.L||!window.Papa){ showFatal('Не загрузились Leaflet/PapaParse.'); throw new Error('libs-missing'); }
 
-/* ── Карта и panes ────────────────────────────────────────────────────────── */
+/* ── Карта и panes ──────────────────────────────────────────────────────── */
 const map=L.map('map',{attributionControl:false}).setView([55.75,37.62],9);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
 L.control.attribution({prefix:false}).addTo(map);
 map.createPane('techPane'); map.getPane('techPane').style.zIndex=430;
 map.createPane('opPane');   map.getPane('opPane').style.zIndex=450;
 
-/* ── CSV загрузка ─────────────────────────────────────────────────────────── */
+/* ── CSV загрузка ────────────────────────────────────────────────────────── */
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 function proxyChain(u){ return [addBuster(u),'https://r.jina.ai/http/'+u.replace(/^https?:\/\//,''),'https://cors.isomorphic-git.org/'+u];}
 async function fetchCsvMany(urls,label){
@@ -169,7 +170,7 @@ async function fetchCsvMany(urls,label){
   throw last||new Error('csv fail');
 }
 
-/* ── Дата/гео/цвет ───────────────────────────────────────────────────────── */
+/* ── Дата/гео/цвет ──────────────────────────────────────────────────────── */
 const num = v=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm= s=> (s??'').toString().trim();
 function detect(keys,cands){ const lower=keys.map(k=>k.toLowerCase()); for(const c of cands){ const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; } for(const k of keys){ const lk=k.toLowerCase(); if(cands.some(c=>lk.includes(c.toLowerCase()))) return k; } return null; }
@@ -179,7 +180,7 @@ function djb2(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h)+str.
 function hslToHex(h,s,l){ h/=360; s/=100; l/=100; const q=l<.5?l*(1+s):l+s-l*s, p=2*l-q; const hr=t=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; }; const r=Math.round(255*hr(h+1/3)), g=Math.round(255*hr(h)), b=Math.round(255*hr(h-1/3)); return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`; }
 function autoColor(key){ const h=djb2(key.toLowerCase()); return hslToHex(h%360, 55+(h%30), 45+((h/7|0)%20)); }
 
-/* ── Локальное + серверные цвета ─────────────────────────────────────────── */
+/* ── Локальное + серверные цвета ────────────────────────────────────────── */
 const LS_KEY='operators-map:colors';
 function loadLocal(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch{return{}} }
 function saveLocal(obj){ localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
@@ -215,7 +216,7 @@ function setColor(kind,name,hex){
   saveRemoteColor(kind,name,hex);
 }
 
-/* ── Состояние ───────────────────────────────────────────────────────────── */
+/* ── Состояние ──────────────────────────────────────────────────────────── */
 const ST={opLayers:new Map(),opCounts:new Map(),opList:[],opColors:new Map(),
           techLayers:new Map(),techCounts:new Map(),techList:[]};
 function layerFor(mapObj, name){ if(!mapObj.has(name)) mapObj.set(name, L.layerGroup().addTo(map)); return mapObj.get(name); }
@@ -224,21 +225,20 @@ function animateToVisible(){ const b=getVisibleBounds(); if(b&&b.isValid()) map.
 function triangleMarker(latlng,color){ const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`; const icon=L.divIcon({html:svg,className:'',iconSize:[22,22],iconAnchor:[11,18]}); return L.marker(latlng,{icon,pane:'techPane'}); }
 function recolorTriangleMarker(marker,color){ const el=marker.getElement(); if(el){ const pg=el.querySelector('polygon'); if(pg) pg.setAttribute('fill',color);} }
 
-/* ── Маршрутизация ───────────────────────────────────────────────────────── */
-const KMH = 30; // оценка средней скорости
+/* ── Маршрутизация (дороги по OSRM) ─────────────────────────────────────── */
+const OSRM = 'https://router.project-osrm.org/route/v1/driving/';
+const KMH_FALLBACK = 30; // если OSRM не дал длительность — оценим сами
+
 function haversine(a,b){ const R=6371; const toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng); const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
 function nnRoute(points){
   if(points.length<=2) return points.map((p,i)=>({i, ...p}));
   const used=new Set(); const route=[]; let current=0;
-  let rem=points.map((p,idx)=>({idx,p}));
-  // старт — ближайшая к центру bounds видимых слоёв
-  const b=getVisibleBounds(); if(b){ const c=b.getCenter(); let best=0,bd=1e9; rem.forEach((r,j)=>{ const d=haversine({lat:c.lat,lng:c.lng}, r.p||r.pnt || r.p || r.p); const pt=r.p||r.pnt||r.p; const dist=haversine({lat:c.lat,lng:c.lng},{lat:pt.lat,lng:pt.lng}); if(dist<bd){bd=dist; best=j;} }); current=best; }
-  let cur=rem[current].idx; used.add(cur); route.push(points[cur]);
+  used.add(current); route.push(points[current]);
   while(route.length<points.length){
-    let best=-1, bd=1e9;
+    let best=-1, bd=1e9, last=route[route.length-1];
     for(let i=0;i<points.length;i++){
       if(used.has(i)) continue;
-      const d=haversine(route[route.length-1], points[i]);
+      const d=haversine(last, points[i]);
       if(d<bd){ bd=d; best=i; }
     }
     used.add(best); route.push(points[best]);
@@ -265,15 +265,73 @@ function twoOpt(route){
   }
   return route;
 }
-let routeLine=null, routeIndices=[];
+
+/* Рисование маршрута */
+let routeLayer=null, routeIndices=[];
 function clearRoute(){
-  if(routeLine){ map.removeLayer(routeLine); routeLine=null; }
+  if(routeLayer){ map.removeLayer(routeLayer); routeLayer=null; }
   routeIndices.forEach(el=>el.remove()); routeIndices=[];
   document.getElementById('routeMeta').textContent='Маршрут не построен.';
   document.getElementById('btnDownload').disabled=true;
 }
 
-/* ── Загрузка данных + отрисовка ─────────────────────────────────────────── */
+/* Получить дорожную геометрию и метрики для одного ребра */
+async function osrmEdge(a,b){
+  const url = `${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
+  try{
+    const r = await fetch(url, {cache:'no-store'});
+    if(!r.ok) throw new Error('osrm http '+r.status);
+    const j = await r.json();
+    const route = j.routes && j.routes[0];
+    if(!route) throw new Error('osrm empty');
+    return {
+      geom: route.geometry,               // GeoJSON LineString
+      distKm: route.distance/1000,        // км
+      durMin: route.duration/60           // мин
+    };
+  }catch(e){
+    // fallback — прямая
+    const dist = haversine(a,b);
+    return {
+      geom: {type:'LineString', coordinates:[[a.lng,a.lat],[b.lng,b.lat]]},
+      distKm: dist,
+      durMin: (dist / KMH_FALLBACK) * 60
+    };
+  }
+}
+
+/* Построить дорожную линию для всего маршрута */
+async function drawRoadRoute(ordered){
+  if(routeLayer){ map.removeLayer(routeLayer); routeLayer=null; }
+  routeIndices.forEach(el=>el.remove()); routeIndices=[];
+
+  let totalKm=0, totalMin=0;
+  const features=[];
+
+  for(let i=1;i<ordered.length;i++){
+    const a=ordered[i-1], b=ordered[i];
+    const seg = await osrmEdge(a,b);
+    totalKm += seg.distKm; totalMin += seg.durMin;
+    features.push({type:'Feature', geometry: seg.geom, properties:{}});
+    // небольшая задержка, чтобы не душить публичный сервер
+    await sleep(120);
+  }
+
+  const fc = {type:'FeatureCollection', features};
+  routeLayer = L.geoJSON(fc, {style:{color:'#2f80ed', weight:5, opacity:0.9}}).addTo(map);
+
+  // индексы на точках
+  ordered.forEach((p,idx)=>{
+    const div = L.divIcon({className:'', html:`<div class="route-index">${idx+1}</div>`});
+    const mrk = L.marker([p.lat,p.lng],{icon:div, interactive:false, zIndexOffset:1000}).addTo(map);
+    routeIndices.push(mrk);
+  });
+
+  map.fitBounds(routeLayer.getBounds().pad(0.2));
+  return {totalKm, totalMin};
+}
+
+/* ── Загрузка данных + отрисовка ────────────────────────────────────────── */
 try{
   // серверные цвета заранее
   const remoteColors = await loadRemoteColors();
@@ -413,21 +471,6 @@ try{
     return pts;
   }
 
-  function drawRoute(route){
-    if(routeLine){ map.removeLayer(routeLine); routeLine=null; }
-    routeIndices.forEach(el=>el.remove()); routeIndices=[];
-    if(!route.length) return;
-    const latlngs = route.map(p=>[p.lat,p.lng]);
-    routeLine = L.polyline(latlngs,{color:'#2f80ed',weight:5,opacity:0.85}).addTo(map);
-    // индексы
-    route.forEach((p,idx)=>{
-      const div = L.divIcon({className:'', html:`<div class="route-index">${idx+1}</div>`});
-      const mrk = L.marker([p.lat,p.lng],{icon:div, interactive:false, zIndexOffset:1000}).addTo(map);
-      routeIndices.push(mrk);
-    });
-    map.fitBounds(routeLine.getBounds().pad(0.2));
-  }
-
   function toCsv(route){
     const rows = [['order','name','lat','lng','cum_km']];
     let sum=0;
@@ -438,26 +481,24 @@ try{
     return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n');
   }
 
-  btnBuild.onclick=()=>{
+  btnBuild.onclick=async ()=>{
     const kind = routeRole.value;
     const name = routeName.value;
     if(!name){ routeMeta.textContent='Выберите имя.'; return; }
     const pts = collectPoints(kind, name);
     if(pts.length<2){ routeMeta.textContent='Недостаточно точек (нужно ≥ 2) или слой скрыт.'; clearRoute(); return; }
-    // ограничение на очень большие наборы для скорости
     const MAX=200; const work = pts.slice(0,MAX);
 
     let route = nnRoute(work);
     route = twoOpt(route);
 
-    // метрики
-    let dist=0; for(let i=1;i<route.length;i++) dist+=haversine(route[i-1],route[i]);
-    const hours = dist / KMH;
-    routeMeta.textContent = `Точек: ${route.length} • Длина: ${dist.toFixed(2)} км • Время: ${(hours*60).toFixed(0)} мин при ${KMH} км/ч`;
+    setBadge('Маршрут по дорогам…');
+    const {totalKm, totalMin} = await drawRoadRoute(route);
+    setBadge(`${ST.opList.length} операторов • ${ST.techList.length} техников • ${pts.length} точек`);
 
-    drawRoute(route);
+    routeMeta.textContent = `Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`;
 
-    // CSV
+    // CSV прежний (порядок точек)
     const csv = toCsv(route);
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
@@ -468,13 +509,12 @@ try{
     };
     btnDownload.disabled=false;
 
-    // перейти на вкладку маршрутов, если не там
     setTab('route');
   };
 
   btnClear.onclick=()=>{ clearRoute(); };
 
-  // массовые кнопки «показать/скрыть» прежние
+  // массовые кнопки
   document.getElementById('btnShowAll').onclick=()=>{
     const list = activeTab==='ops' ? ST.opList : ST.techList;
     const mapObj = activeTab==='ops' ? ST.opLayers : ST.techLayers;
@@ -482,9 +522,7 @@ try{
     const groupOn = activeTab==='ops' ? toggleOps.checked : toggleTech.checked;
     for(const name of list){
       const id=safeId(pref+name), cb=document.getElementById(id);
-      if(cb && !cb.checked){
-        cb.checked=true; if(groupOn) mapObj.get(name).addTo(map);
-      }
+      if(cb && !cb.checked){ cb.checked=true; if(groupOn) mapObj.get(name).addTo(map); }
     }
     animateToVisible();
   };
