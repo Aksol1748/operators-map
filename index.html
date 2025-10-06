@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ASPGroupMap — операторы поверх техников</title>
+  <title>ASPGroupMap — стабильные цвета</title>
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
@@ -48,7 +48,6 @@
 
     <div class="view-toggle">
       <label><input type="checkbox" id="toggleOps" checked>Операторы</label>
-      <!-- группа техников выключена при старте -->
       <label><input type="checkbox" id="toggleTech">Техники</label>
     </div>
 
@@ -164,6 +163,21 @@ function detect(keys, cands){ const lower=keys.map(k=>k.toLowerCase()); for(cons
 const safeId = (str)=> 'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
 const splitMany = (s)=> norm(s).split(/[,\|;/]/).map(x=>x.trim()).filter(Boolean);
 
+/* === Стабильные цвета === */
+function djb2(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h) + str.charCodeAt(i); h|=0; } return Math.abs(h); }
+function hslToHex(h,s,l){
+  h/=360; s/=100; l/=100;
+  const f=(n)=>{ const k=(n+h)%1; const a=s*Math.min(l,1-l); const c=l-a*Math.max(-1,Math.min(Math.min(k*6-3,4-k*6),1)); return Math.round(255*c).toString(16).padStart(2,'0'); };
+  return `#${f(0)}${f(2/3)}${f(1/3)}`;
+}
+function colorFromName(name){
+  const h = djb2(name.toLowerCase());
+  const hue = h % 360;          // вся радуга
+  const sat = 65;               // сочность
+  const lig = 55;               // яркость
+  return hslToHex(hue, sat, lig);
+}
+
 /* === Глобальное состояние === */
 const ST = { opLayers:new Map(), opCounts:new Map(), opList:[], techLayers:new Map(), techCounts:new Map(), techList:[] };
 function layerFor(mapObj, name){ if(!mapObj.has(name)) mapObj.set(name, L.layerGroup().addTo(map)); return mapObj.get(name); }
@@ -191,6 +205,7 @@ try{
 
   const points = Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data || [];
   const ops    = Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data || [];
+
   if(!points.length){ showFatal('CSV точек пуст', [['points (pub)',POINTS_PUB],['points (export)',POINTS_EXP]]); throw new Error('no points'); }
 
   const pKeys=Object.keys(points[0]||{});
@@ -210,14 +225,16 @@ try{
     throw new Error('no lat/lng');
   }
 
-  // палитры
-  const paletteOps  = ["#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6","#bcf60c","#fabebe","#008080","#e6beff","#9A6324","#fffac8","#800000","#aaffc3","#808000","#ffd8b1","#000075","#808080","#000000"];
-  const paletteTech = ["#2E86AB","#FF7F50","#7D3C98","#2ECC71","#E67E22","#1ABC9C","#D35400","#C0392B","#16A085","#AF7AC5","#5DADE2","#45B39D","#52BE80","#F4D03F","#DC7633","#626567"];
-  let iOp=0, iTech=0; const nextOp=()=>paletteOps[(iOp++)%paletteOps.length]; const nextTech=()=>paletteTech[(iTech++)%paletteTech.length];
-
+  // карта цветов для операторов из таблицы (если есть), иначе — стабильный из имени
   const opColors = new Map();
-  for(const row of ops){ const n=norm(row[opNameKey]); if(!n) continue; opColors.set(n, norm(row[opColorKey]) || nextOp()); }
-  const techColors = new Map(); const colorForTech=(n)=>{ if(!techColors.has(n)) techColors.set(n, nextTech()); return techColors.get(n); };
+  for(const row of ops){
+    const n = norm(row[opNameKey]); if(!n) continue;
+    const fromSheet = norm(row[opColorKey]);
+    opColors.set(n, fromSheet || colorFromName(n));
+  }
+  // техники — сразу стабильный по имени
+  const techColors = new Map();
+  const colorForTech=(n)=>{ if(!techColors.has(n)) techColors.set(n, colorFromName('tech:'+n)); return techColors.get(n); };
 
   let ok=0,bad=0; const all=[];
   for(const r of points){
@@ -225,8 +242,7 @@ try{
     if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
     const title = norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-    // ТЕХНИКИ: добавляем в слои (чекбоксы элементов включены изначально),
-    // НО группа выключена — поэтому на карту не выводим до переключателя.
+    // ТЕХНИКИ: слои готовы, группа выключена при старте
     if(techKey){
       const techs = splitMany(r[techKey]);
       for(const t of techs){
@@ -237,10 +253,10 @@ try{
       }
     }
 
-    // ОПЕРАТОРЫ: показываем сразу (pane выше — кружки поверх)
+    // ОПЕРАТОРЫ: показываем сразу
     const op = norm(r[opKey]) || 'Без оператора';
-    const opColor = opColors.get(op) || (opColors.set(op,nextOp()), opColors.get(op));
-    const cm = L.circleMarker([lat,lng],{ pane:'opPane', radius:7, weight:2, color:'#222', fillColor:opColor, fillOpacity:.9 })
+    const col = opColors.get(op) || colorFromName(op);
+    const cm = L.circleMarker([lat,lng],{ pane:'opPane', radius:7, weight:2, color:'#222', fillColor:col, fillOpacity:.9 })
       .bindPopup(`<b>${title}</b><br>Оператор: ${op}`);
     layerFor(ST.opLayers, op).addLayer(cm);
     ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1); all.push(cm); ok++;
@@ -271,7 +287,6 @@ try{
     cb.checked = initiallyChecked;
 
     const mapObj = (kind==='tech') ? ST.techLayers : ST.opLayers;
-    // применяем начальную видимость: показываем только если включена группа
     const groupOn = (kind==='tech') ? document.getElementById('toggleTech').checked
                                     : document.getElementById('toggleOps').checked;
     if (cb.checked && groupOn) mapObj.get(name).addTo(map); else map.removeLayer(mapObj.get(name));
@@ -286,11 +301,9 @@ try{
     targetUl.appendChild(li);
   }
 
-  // ИНДИВИДУАЛЬНЫЕ чекбоксы: все включены.
   const INIT_ITEM_CHECKED = true;
-
-  for(const op of ST.opList)  addRow(opsList,  'op',   op,  opColors.get(op)||'#999', ST.opCounts.get(op)||0,  INIT_ITEM_CHECKED);
-  for(const t  of ST.techList)addRow(techList, 'tech', t,  colorForTech(t),            ST.techCounts.get(t)||0, INIT_ITEM_CHECKED);
+  for(const op of ST.opList)  addRow(opsList,  'op',   op,  (opColors.get(op)||colorFromName(op)), ST.opCounts.get(op)||0,  INIT_ITEM_CHECKED);
+  for(const t  of ST.techList)addRow(techList, 'tech', t,  colorFromName('tech:'+t),               ST.techCounts.get(t)||0, INIT_ITEM_CHECKED);
 
   /* верхние переключатели групп */
   const toggleOps  = document.getElementById('toggleOps');
