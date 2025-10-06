@@ -6,11 +6,11 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Operators Map — Live FIX</title>
+  <title>Operators Map — Live v7 (desktop fix)</title>
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
-    .status-badge{position:absolute; top:8px; right:8px; z-index:10000; background:rgba(0,0,0,.8); color:#fff; padding:6px 10px; border-radius:12px; font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    .status-badge{position:absolute; top:8px; right:8px; z-index:10000; background:rgba(0,0,0,.85); color:#fff; padding:6px 10px; border-radius:12px; font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
     .filters-toggle{position:absolute; top:8px; left:8px; z-index:10001; background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px; font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;}
     aside#filters{position:absolute; top:52px; left:8px; z-index:1000; width:300px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px); overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px; box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; transition: transform .25s ease;}
     body.filters-closed aside#filters { transform: translateX(-110%); }
@@ -25,7 +25,7 @@
     #opsList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
     .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px;}
     .count{margin-left:auto; color:#888; font-size:12px;}
-    noscript, .fatal {position:absolute; left:8px; right:8px; bottom:8px; z-index:10002; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);}
+    .fatal {position:absolute; left:8px; right:8px; bottom:8px; z-index:10002; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);}
   </style>
 </head>
 <body>
@@ -45,9 +45,8 @@
 
   <noscript>Нужен JavaScript</noscript>
 
-<!-- ВАЖНО: модульный скрипт -->
 <script type="module">
-/* Unicode-safe btoa shim (на случай чужих вызовов) */
+/* Unicode-safe btoa shim */
 (function(){ const native = window.btoa ? window.btoa.bind(window) : null;
   window.btoa = function(s){ try { return native ? native(s) : ''; } catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; } };
 })();
@@ -60,40 +59,76 @@ const badge = document.getElementById('statusBadge');
 const setBadge = (msg) => badge.textContent = msg;
 const fatal = (msg) => { setBadge('Ошибка'); const d=document.createElement('div'); d.className='fatal'; d.innerHTML='<b>Критическая ошибка</b><br>'+msg; document.body.appendChild(d); };
 
-/* libs */
-function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('script '+src));document.head.appendChild(s);});}
-function loadStyle(href){return new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=()=>rej(new Error('style '+href));document.head.appendChild(l);});}
+/* ====== Мульти-CDN загрузка библиотек ====== */
+function addBuster(u){ return u + (u.includes('?')?'&':'?') + 'v=' + Date.now(); }
+async function loadStyleChain(list){
+  let last=null;
+  for(const href of list){
+    try { await new Promise((res,rej)=>{ const l=document.createElement('link'); l.rel='stylesheet'; l.href=addBuster(href); l.onload=res; l.onerror=()=>rej(new Error(href)); document.head.appendChild(l); }); return; }
+    catch(e){ last=e; console.warn('CSS fail:', e.message||e); }
+  }
+  throw last || new Error('no CSS');
+}
+async function loadScriptChain(list){
+  let last=null;
+  for(const src of list){
+    try { await new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=addBuster(src); s.async=true; s.onload=res; s.onerror=()=>rej(new Error(src)); document.head.appendChild(s); }); return; }
+    catch(e){ last=e; console.warn('JS fail:', e.message||e); }
+  }
+  throw last || new Error('no JS');
+}
 
-await loadStyle("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
-await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js");
-await loadScript("https://unpkg.com/papaparse@5.4.1/papaparse.min.js");
+setBadge('Грузим библиотеки…');
+await loadStyleChain([
+  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css'
+]);
+await loadScriptChain([
+  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js'
+]);
+await loadScriptChain([
+  'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js',
+  'https://unpkg.com/papaparse@5.4.1/papaparse.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js'
+]);
 
-/* map */
+if(!window.L || !window.Papa){
+  fatal('Не удалось подгрузить Leaflet/PapaParse (CDN заблокированы?). Откройте в другом браузере/сети.');
+  throw new Error('libs-missing');
+}
+
+/* ====== Карта ====== */
 const map = L.map('map').setView([55.75,37.62],9);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 
-/* fetch CSV */
-const addBuster = (u)=> u + (u.includes('?') ? '&' : '?') + 't=' + Date.now();
+/* ====== CSV загрузка ====== */
 async function fetchCsv(url){
-  const r=await fetch(addBuster(url), {cache:'no-store'});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const t=await r.text();
-  if(t.startsWith('<!')) throw new Error('HTML вместо CSV');
+  // аккуратный cache-buster
+  const u = addBuster(url);
+  const r = await fetch(u, {cache:'no-store', credentials:'omit'});
+  if(!r.ok) throw new Error('HTTP '+r.status+' при загрузке '+url);
+  const t = await r.text();
+  if(t.startsWith('<!')) throw new Error('Получен HTML вместо CSV с '+url);
   return t;
 }
 
-/* helpers */
+/* ====== Утилиты ====== */
 const num = (v)=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm = (s)=> (s??'').toString().trim();
 function detectColumn(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}return null;}
 const safeId = (str)=> 'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
 
-/* main */
+/* ====== Главный поток ====== */
 try{
   setBadge('Загрузка данных…');
   const [pointsCsv, opsCsv] = await Promise.all([fetchCsv(POINTS_URL), fetchCsv(OPERATORS_URL)]);
-  const points = Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data;
-  const ops    = Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data;
+  const points = Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data || [];
+  const ops    = Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data || [];
+
+  if(!points.length){ fatal('CSV точек пуст или не распознан. Проверьте ссылку на Google Sheets.'); throw new Error('no-points'); }
 
   const pKeys=Object.keys(points[0]||{});
   const oKeys=Object.keys(ops[0]||{});
@@ -133,8 +168,7 @@ try{
   setBadge(`${uniqueOps.length} операторов • ${ok} точек${bad?` • пропусков:${bad}`:''}`);
 
   const opsList=document.getElementById('opsList');
-  const operatorsCountEl=document.getElementById('operatorsCount');
-  operatorsCountEl.textContent=uniqueOps.length;
+  document.getElementById('operatorsCount').textContent=uniqueOps.length;
 
   function getVisibleBounds(){
     const visible = [...layers.entries()].filter(([op])=>{
@@ -143,8 +177,7 @@ try{
     }).map(([_,lg])=>lg);
     if(!visible.length) return null;
     const groups = visible.map(lg=>L.featureGroup(lg.getLayers()));
-    const bounds = groups.reduce((acc,g)=> acc? acc.extend(g.getBounds()): g.getBounds(), null);
-    return bounds;
+    return groups.reduce((acc,g)=> acc? acc.extend(g.getBounds()): g.getBounds(), null);
   }
   function animateToVisible(duration=0.8){
     const b=getVisibleBounds();
@@ -174,17 +207,11 @@ try{
   };
 
   document.getElementById('btnShowAll').onclick=()=>{
-    for(const op of uniqueOps){
-      const id=safeId(op), cb=document.getElementById(id);
-      if(cb && !cb.checked){ cb.checked=true; layers.get(op).addTo(map); }
-    }
+    for(const op of uniqueOps){ const id=safeId(op), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; layers.get(op).addTo(map); } }
     animateToVisible();
   };
   document.getElementById('btnHideAll').onclick=()=>{
-    for(const op of uniqueOps){
-      const id=safeId(op), cb=document.getElementById(id);
-      if(cb && cb.checked){ cb.checked=false; map.removeLayer(layers.get(op)); }
-    }
+    for(const op of uniqueOps){ const id=safeId(op), cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(layers.get(op)); } }
   };
 
 } catch(e){
