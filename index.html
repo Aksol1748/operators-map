@@ -55,15 +55,17 @@
   <noscript>Нужен JavaScript</noscript>
 
 <script>
-// ========== НАСТРОЙКИ CSV ==========
 const POINTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?output=csv";
 const OPERATORS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=304610077&single=true&output=csv";
 
-// ========== UI ==========
 const badge = document.getElementById('statusBadge');
 const setBadge = (msg) => badge.textContent = msg;
 
-// ========== LIBS ==========
+// безопасное кодирование строк (работает с кириллицей)
+function safeId(str) {
+  return 'id_' + Array.from(str).map(ch => ch.charCodeAt(0).toString(16)).join('');
+}
+
 async function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 async function loadStyle(href){return new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=rej;document.head.appendChild(l);});}
 
@@ -71,36 +73,24 @@ await loadStyle("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
 await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js");
 await loadScript("https://unpkg.com/papaparse@5.4.1/papaparse.min.js");
 
-// ========== MAP ==========
 const map = L.map('map').setView([55.75,37.62],9);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 
-// ========== FETCH CSV с ретраями ==========
-async function fetchCsv(url, retries=3){
-  for(let i=0;i<retries;i++){
-    try{
-      const r=await fetch(url+'?t='+Date.now());
-      if(!r.ok) throw new Error('HTTP '+r.status);
-      const t=await r.text();
-      if(t.startsWith('<!')) throw new Error('HTML вместо CSV');
-      return t;
-    }catch(e){
-      console.warn('Попытка',i+1,'ошибка',e);
-      await new Promise(r=>setTimeout(r,500*(i+1)));
-    }
-  }
-  throw new Error('Не удалось загрузить '+url);
+async function fetchCsv(url){
+  const r=await fetch(url+'?t='+Date.now());
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const t=await r.text();
+  if(t.startsWith('<!')) throw new Error('HTML вместо CSV');
+  return t;
 }
 
-// ========== HELPERS ==========
 const num = (v)=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm = (s)=> (s??'').toString().trim();
 function detectColumn(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}return null;}
 
-// ========== MAIN ==========
 (async()=>{
   try{
-    setBadge('Загрузка CSV…');
+    setBadge('Загрузка данных…');
     const [pointsCsv,opsCsv]=await Promise.all([fetchCsv(POINTS_URL),fetchCsv(OPERATORS_URL)]);
     const points=Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data;
     const ops=Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data;
@@ -144,10 +134,11 @@ function detectColumn(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(c
     for(const op of uniqueOps){
       const color=opColors.get(op)||'#999';
       const c=counts.get(op)||0;
+      const safe = safeId(op);
       const li=document.createElement('li');
-      li.innerHTML=`<input type="checkbox" id="op_${btoa(op)}" checked>
+      li.innerHTML=`<input type="checkbox" id="${safe}" checked>
       <span class="swatch" style="background:${color}"></span>
-      <label for="op_${btoa(op)}">${op}</label><span class="count">${c}</span>`;
+      <label for="${safe}">${op}</label><span class="count">${c}</span>`;
       const cb=li.querySelector('input');
       cb.onchange=()=>{const layer=layers.get(op);if(cb.checked)layer.addTo(map);else map.removeLayer(layer);};
       opsList.appendChild(li);
