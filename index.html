@@ -6,64 +6,26 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Operators Map — Live v5</title>
+  <title>Operators Map — Live FIX</title>
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
-
-    .status-badge{
-      position:absolute; top:8px; right:8px; z-index:10000;
-      background:rgba(0,0,0,.8); color:#fff; padding:6px 10px; border-radius:12px;
-      font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; backdrop-filter: blur(3px);
-    }
-
-    .filters-toggle{
-      position:absolute; top:8px; left:8px; z-index:10001;
-      background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px;
-      font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;
-    }
-
-    aside#filters{
-      position:absolute; top:52px; left:8px; z-index:1000;
-      width:300px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px);
-      overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px;
-      box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      transition: transform .25s ease;
-    }
-    /* универсальное сворачивание панели (и десктоп, и мобила) */
+    .status-badge{position:absolute; top:8px; right:8px; z-index:10000; background:rgba(0,0,0,.8); color:#fff; padding:6px 10px; border-radius:12px; font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    .filters-toggle{position:absolute; top:8px; left:8px; z-index:10001; background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px; font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;}
+    aside#filters{position:absolute; top:52px; left:8px; z-index:1000; width:300px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px); overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px; box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; transition: transform .25s ease;}
     body.filters-closed aside#filters { transform: translateX(-110%); }
-
-    #filters h3{
-      margin:4px 6px 8px; font-size:14px;
-      position: sticky; top:0; background:#fff; z-index:2; padding-top:6px;
-    }
+    #filters h3{margin:4px 6px 8px; font-size:14px; position: sticky; top:0; background:#fff; z-index:2; padding-top:6px;}
     #filters .muted{color:#666; font-size:12px; margin-left:6px;}
-
-    .toolbar {
-      display:flex; gap:8px; margin:4px 6px 8px;
-      position: sticky; top:28px; background:#fff; z-index:2; padding-bottom:6px;
-    }
-    .toolbar button{
-      flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8;
-      font:600 12px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; cursor:pointer;
-    }
+    .toolbar{display:flex; gap:8px; margin:4px 6px 8px; position: sticky; top:28px; background:#fff; z-index:2; padding-bottom:6px;}
+    .toolbar button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; font:600 12px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; cursor:pointer;}
     .toolbar .secondary{background:#fff;}
-    .toolbar button:active{transform:translateY(1px);}
-
     #filters .search{margin:6px; position: sticky; top:74px; background:#fff; z-index:2; padding-bottom:6px;}
     #filters .search input{width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:8px;}
-
     #opsList{list-style:none; margin:8px 6px 10px; padding:0;}
     #opsList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
     .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px;}
     .count{margin-left:auto; color:#888; font-size:12px;}
-
-    noscript, .fatal {
-      position:absolute; inset:auto 8px 8px 8px; z-index:10002;
-      background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px;
-      font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);
-    }
+    noscript, .fatal {position:absolute; left:8px; right:8px; bottom:8px; z-index:10002; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);}
   </style>
 </head>
 <body>
@@ -73,39 +35,34 @@
 
   <aside id="filters" aria-label="Фильтры по операторам">
     <h3>Операторы <span class="muted" id="operatorsCount">0</span></h3>
-
-    <!-- прикреплённые кнопки -->
     <div class="toolbar">
       <button id="btnShowAll">Показать всех</button>
       <button id="btnHideAll" class="secondary">Скрыть всех</button>
     </div>
-
     <div class="search"><input id="opSearch" placeholder="Поиск оператора…"/></div>
     <ul id="opsList"></ul>
   </aside>
 
   <noscript>Нужен JavaScript</noscript>
 
-<script>
+<!-- ВАЖНО: модульный скрипт -->
+<script type="module">
 /* Unicode-safe btoa shim (на случай чужих вызовов) */
-(function(){
-  const native = window.btoa ? window.btoa.bind(window) : null;
-  window.btoa = function(s){
-    try { return native ? native(s) : '';
-    } catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; }
-  };
+(function(){ const native = window.btoa ? window.btoa.bind(window) : null;
+  window.btoa = function(s){ try { return native ? native(s) : ''; } catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; } };
 })();
 
 /* Публичные CSV */
-const POINTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?output=csv";
+const POINTS_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?output=csv";
 const OPERATORS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=304610077&single=true&output=csv";
 
 const badge = document.getElementById('statusBadge');
 const setBadge = (msg) => badge.textContent = msg;
+const fatal = (msg) => { setBadge('Ошибка'); const d=document.createElement('div'); d.className='fatal'; d.innerHTML='<b>Критическая ошибка</b><br>'+msg; document.body.appendChild(d); };
 
 /* libs */
-async function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-async function loadStyle(href){return new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=rej;document.head.appendChild(l);});}
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('script '+src));document.head.appendChild(s);});}
+function loadStyle(href){return new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=()=>rej(new Error('style '+href));document.head.appendChild(l);});}
 
 await loadStyle("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
 await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js");
@@ -116,8 +73,9 @@ const map = L.map('map').setView([55.75,37.62],9);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 
 /* fetch CSV */
+const addBuster = (u)=> u + (u.includes('?') ? '&' : '?') + 't=' + Date.now();
 async function fetchCsv(url){
-  const r=await fetch(url+'?t='+Date.now(), {cache:'no-store'});
+  const r=await fetch(addBuster(url), {cache:'no-store'});
   if(!r.ok) throw new Error('HTTP '+r.status);
   const t=await r.text();
   if(t.startsWith('<!')) throw new Error('HTML вместо CSV');
@@ -131,123 +89,111 @@ function detectColumn(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(c
 const safeId = (str)=> 'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
 
 /* main */
-(async()=>{
-  try{
-    setBadge('Загрузка данных…');
-    const [pointsCsv, opsCsv] = await Promise.all([fetchCsv(POINTS_URL), fetchCsv(OPERATORS_URL)]);
-    const points = Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data;
-    const ops    = Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data;
+try{
+  setBadge('Загрузка данных…');
+  const [pointsCsv, opsCsv] = await Promise.all([fetchCsv(POINTS_URL), fetchCsv(OPERATORS_URL)]);
+  const points = Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data;
+  const ops    = Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data;
 
-    const pKeys=Object.keys(points[0]||{});
-    const oKeys=Object.keys(ops[0]||{});
-    const latKey=detectColumn(pKeys,['lat','latitude','широта','y']);
-    const lngKey=detectColumn(pKeys,['lng','lon','longitude','долгота','x']);
-    const opKey =detectColumn(pKeys,['operator','оператор','отв.пользователь']);
-    const nameKey=detectColumn(pKeys,['name','название','локация','адрес']);
+  const pKeys=Object.keys(points[0]||{});
+  const oKeys=Object.keys(ops[0]||{});
+  const latKey=detectColumn(pKeys,['lat','latitude','широта','y']);
+  const lngKey=detectColumn(pKeys,['lng','lon','longitude','долгота','x']);
+  const opKey =detectColumn(pKeys,['operator','оператор','отв.пользователь']);
+  const nameKey=detectColumn(pKeys,['name','название','локация','адрес']);
 
-    const opNameKey =detectColumn(oKeys,['operator','оператор','фио','name']);
-    const opColorKey=detectColumn(oKeys,['color','цвет','hex']);
+  const opNameKey =detectColumn(oKeys,['operator','оператор','фио','name']);
+  const opColorKey=detectColumn(oKeys,['color','цвет','hex']);
 
-    const palette=["#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6",
-                   "#bcf60c","#fabebe","#008080","#e6beff","#9A6324","#fffac8","#800000","#aaffc3",
-                   "#808000","#ffd8b1","#000075","#808080","#000000"];
-    let pi=0; const nextColor=()=>palette[(pi++)%palette.length];
+  const palette=["#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6","#bcf60c","#fabebe","#008080","#e6beff","#9A6324","#fffac8","#800000","#aaffc3","#808000","#ffd8b1","#000075","#808080","#000000"];
+  let pi=0; const nextColor=()=>palette[(pi++)%palette.length];
 
-    const opColors=new Map();
-    for(const row of ops){
-      const n=norm(row[opNameKey]); if(!n) continue;
-      opColors.set(n, norm(row[opColorKey]) || nextColor());
-    }
+  const opColors=new Map();
+  for(const row of ops){ const n=norm(row[opNameKey]); if(!n) continue; opColors.set(n, norm(row[opColorKey]) || nextColor()); }
 
-    const layers=new Map(), counts=new Map(), all=[];
-    function layerFor(n){ if(!layers.has(n)) layers.set(n, L.layerGroup().addTo(map)); return layers.get(n); }
+  const layers=new Map(), counts=new Map(), all=[];
+  function layerFor(n){ if(!layers.has(n)) layers.set(n, L.layerGroup().addTo(map)); return layers.get(n); }
 
-    let ok=0,bad=0;
-    for(const r of points){
-      const lat=num(r[latKey]), lng=num(r[lngKey]);
-      if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
-      const op=norm(r[opKey]) || 'Без оператора';
-      const title=norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-      if(!opColors.has(op)) opColors.set(op, nextColor());
-      const color=opColors.get(op);
-      const m=L.circleMarker([lat,lng],{radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.85})
-        .bindPopup(`<b>${title}</b><br>${op}`);
-      layerFor(op).addLayer(m); all.push(m);
-      counts.set(op,(counts.get(op)||0)+1); ok++;
-    }
-
-    if(all.length){ const g=L.featureGroup(all); map.fitBounds(g.getBounds().pad(0.2)); }
-
-    const uniqueOps=[...counts.keys()].sort((a,b)=>(counts.get(b)||0)-(counts.get(a)||0));
-    setBadge(`${uniqueOps.length} операторов • ${ok} точек${bad?` • пропусков:${bad}`:''}`);
-
-    const opsList=document.getElementById('opsList');
-    const operatorsCountEl=document.getElementById('operatorsCount');
-    operatorsCountEl.textContent=uniqueOps.length;
-
-    function getVisibleBounds(){
-      const visible = [...layers.entries()].filter(([op])=>{
-        const cb=document.getElementById(safeId(op));
-        return cb && cb.checked;
-      }).map(([_,lg])=>lg);
-      if(!visible.length) return null;
-      const groups = visible.map(lg=>L.featureGroup(lg.getLayers()));
-      const bounds = groups.reduce((acc,g)=> acc? acc.extend(g.getBounds()): g.getBounds(), null);
-      return bounds;
-    }
-    function animateToVisible(duration=0.8){
-      const b=getVisibleBounds();
-      if(b && b.isValid()){ map.flyToBounds(b.pad(0.2), { duration, easeLinearity: 0.25 }); }
-    }
-
-    for(const op of uniqueOps){
-      const color=opColors.get(op)||'#999';
-      const c=counts.get(op)||0;
-      const id=safeId(op);
-      const li=document.createElement('li');
-      li.innerHTML=`<input type="checkbox" id="${id}" checked>
-        <span class="swatch" style="background:${color}"></span>
-        <label for="${id}">${op}</label>
-        <span class="count">${c}</span>`;
-      const cb=li.querySelector('input');
-      cb.onchange=()=>{ const layer=layers.get(op); if(cb.checked) layer.addTo(map); else map.removeLayer(layer); animateToVisible(); };
-      opsList.appendChild(li);
-    }
-
-    document.getElementById('opSearch').oninput=(e)=>{
-      const q=e.target.value.toLowerCase().trim();
-      for(const li of opsList.children){
-        const t=li.querySelector('label').textContent.toLowerCase();
-        li.style.display = t.includes(q) ? '' : 'none';
-      }
-    };
-
-    // Массовые кнопки
-    document.getElementById('btnShowAll').onclick=()=>{
-      for(const op of uniqueOps){
-        const id=safeId(op), cb=document.getElementById(id);
-        if(cb && !cb.checked){ cb.checked=true; layers.get(op).addTo(map); }
-      }
-      animateToVisible();
-    };
-    document.getElementById('btnHideAll').onclick=()=>{
-      for(const op of uniqueOps){
-        const id=safeId(op), cb=document.getElementById(id);
-        if(cb && cb.checked){ cb.checked=false; map.removeLayer(layers.get(op)); }
-      }
-      // без перелёта, если всё выключено
-    };
-
-  }catch(e){
-    console.error(e);
-    setBadge('Ошибка: '+(e.message||e));
+  let ok=0,bad=0;
+  for(const r of points){
+    const lat=num(r[latKey]), lng=num(r[lngKey]);
+    if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
+    const op=norm(r[opKey]) || 'Без оператора';
+    const title=norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    if(!opColors.has(op)) opColors.set(op, nextColor());
+    const color=opColors.get(op);
+    const m=L.circleMarker([lat,lng],{radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.85}).bindPopup(`<b>${title}</b><br>${op}`);
+    layerFor(op).addLayer(m); all.push(m);
+    counts.set(op,(counts.get(op)||0)+1); ok++;
   }
-})();
 
-/* сворачивание панели теперь работает везде */
-document.getElementById('filtersToggle').onclick=()=>{
-  document.body.classList.toggle('filters-closed');
-};
+  if(all.length){ const g=L.featureGroup(all); map.fitBounds(g.getBounds().pad(0.2)); }
+
+  const uniqueOps=[...counts.keys()].sort((a,b)=>(counts.get(b)||0)-(counts.get(a)||0));
+  setBadge(`${uniqueOps.length} операторов • ${ok} точек${bad?` • пропусков:${bad}`:''}`);
+
+  const opsList=document.getElementById('opsList');
+  const operatorsCountEl=document.getElementById('operatorsCount');
+  operatorsCountEl.textContent=uniqueOps.length;
+
+  function getVisibleBounds(){
+    const visible = [...layers.entries()].filter(([op])=>{
+      const cb=document.getElementById(safeId(op));
+      return cb && cb.checked;
+    }).map(([_,lg])=>lg);
+    if(!visible.length) return null;
+    const groups = visible.map(lg=>L.featureGroup(lg.getLayers()));
+    const bounds = groups.reduce((acc,g)=> acc? acc.extend(g.getBounds()): g.getBounds(), null);
+    return bounds;
+  }
+  function animateToVisible(duration=0.8){
+    const b=getVisibleBounds();
+    if(b && b.isValid()){ map.flyToBounds(b.pad(0.2), { duration, easeLinearity: 0.25 }); }
+  }
+
+  for(const op of uniqueOps){
+    const color=opColors.get(op)||'#999';
+    const c=counts.get(op)||0;
+    const id=safeId(op);
+    const li=document.createElement('li');
+    li.innerHTML=`<input type="checkbox" id="${id}" checked>
+      <span class="swatch" style="background:${color}"></span>
+      <label for="${id}">${op}</label>
+      <span class="count">${c}</span>`;
+    const cb=li.querySelector('input');
+    cb.onchange=()=>{ const layer=layers.get(op); if(cb.checked) layer.addTo(map); else map.removeLayer(layer); animateToVisible(); };
+    opsList.appendChild(li);
+  }
+
+  document.getElementById('opSearch').oninput=(e)=>{
+    const q=e.target.value.toLowerCase().trim();
+    for(const li of opsList.children){
+      const t=li.querySelector('label').textContent.toLowerCase();
+      li.style.display = t.includes(q) ? '' : 'none';
+    }
+  };
+
+  document.getElementById('btnShowAll').onclick=()=>{
+    for(const op of uniqueOps){
+      const id=safeId(op), cb=document.getElementById(id);
+      if(cb && !cb.checked){ cb.checked=true; layers.get(op).addTo(map); }
+    }
+    animateToVisible();
+  };
+  document.getElementById('btnHideAll').onclick=()=>{
+    for(const op of uniqueOps){
+      const id=safeId(op), cb=document.getElementById(id);
+      if(cb && cb.checked){ cb.checked=false; map.removeLayer(layers.get(op)); }
+    }
+  };
+
+} catch(e){
+  console.error(e);
+  fatal('Не удалось инициализировать: ' + (e.message || e));
+}
+
+/* сворачивание панели */
+document.getElementById('filtersToggle').onclick=()=>{ document.body.classList.toggle('filters-closed'); };
 </script>
 </body>
 </html>
