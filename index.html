@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Operators Map — TG safe</title>
+<title>Operators Map — resilient</title>
 <style>
   html, body {height:100%; margin:0;}
   #map {position:absolute; inset:0; background:#f4f4f4;}
@@ -36,7 +36,6 @@
     aside#filters{ transform:translateX(-110%); transition:transform .25s ease; }
     aside#filters.open{ transform:translateX(0); }
   }
-  /* Фолбэк-сообщение, если вообще ничего не загрузилось */
   noscript, .fatal {
     position:absolute; inset:auto 8px 8px 8px; z-index:10002;
     background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px;
@@ -57,22 +56,19 @@
 
 <script>
 (async () => {
-  // ---------- UI helpers ----------
+  // ---------- UI ----------
   const badge = document.getElementById('statusBadge');
   const setBadge = (msg) => { if (badge) badge.textContent = msg; };
   const fatal = (msg) => {
     setBadge('Ошибка');
     const d = document.createElement('div');
     d.className = 'fatal';
-    d.innerHTML = '<b>Критическая ошибка</b><br>' + msg + '<br><small>Попробуйте открыть во внешнем браузере</small>';
+    d.innerHTML = '<b>Критическая ошибка</b><br>' + msg + '<br><small>Откройте во внешнем браузере, если это Telegram</small>';
     document.body.appendChild(d);
   };
   window.addEventListener('error', e => setBadge('Ошибка: ' + (e?.message || 'скрипт')));
 
-  // ---------- Detect TG WebView ----------
-  const isTG = /Telegram/i.test(navigator.userAgent);
-
-  // ---------- Multi-CDN loader (без SRI) ----------
+  // ---------- Multi-CDN loader ----------
   async function loadScriptChain(urls){ for (let i=0;i<urls.length;i++){ try{
       await new Promise((res, rej)=>{ const s=document.createElement('script'); s.src=urls[i]; s.async=true; s.onload=res; s.onerror=()=>rej(new Error(urls[i])); document.head.appendChild(s);});
       return;
@@ -85,7 +81,7 @@
   }catch(e){ console.warn('CSS fail:', e.message); } }
   throw new Error('Не удалось загрузить CSS: '+urls.join(' | ')); }
 
-  // ---------- Libraries ----------
+  // ---------- Load libs (Leaflet + Papa) ----------
   setBadge('Грузим библиотеки…');
   await loadStyleChain([
     'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css',
@@ -109,7 +105,7 @@
     maxZoom: 19, attribution: '&copy; OpenStreetMap'
   }).addTo(map);
 
-  // ---------- Data sources ----------
+  // ---------- Sources ----------
   const POINTS_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=0&single=true&output=csv";
   const OPERATORS_URL =
@@ -118,7 +114,6 @@
   const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
   const addBuster = (u)=>u + (u.includes('?')?'&':'?') + 't=' + Date.now();
 
-  // более агрессивная цепочка прокси; в TG чаще всего живёт r.jina.ai
   function corsChain(url){
     return [
       addBuster(url),
@@ -157,17 +152,79 @@
   const norm = (s)=> (s ?? '').toString().trim();
   function detectColumn(keys, cands){ const lower=keys.map(k=>k.toLowerCase()); for (const c of cands){ const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; } return null; }
 
-  const palette=["#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6",
-                 "#bcf60c","#fabebe","#008080","#e6beff","#9A6324","#fffac8","#800000","#aaffc3",
-                 "#808000","#ffd8b1","#000075","#808080","#000000"];
-  let pi=0; const nextColor=()=>palette[(pi++)%palette.length];
+  // --- parse coords from single cell (e.g., "55.7, 37.6" or "POINT(37.6 55.7)") ---
+  function parseCoordsFromCell(val) {
+    if (val == null) return null;
+    const s = String(val).trim();
+    if (!s) return null;
+
+    let m = s.match(/POINT\s*\(\s*(-?\d+(?:[.,]\d+)?)\s+(-?\d+(?:[.,]\d+)?)\s*\)/i);
+    if (m) {
+      const lon = Number(m[1].replace(',', '.'));
+      const lat = Number(m[2].replace(',', '.'));
+      return (isFinite(lat) && isFinite(lon)) ? { lat, lng: lon } : null;
+    }
+
+    m = s.match(/(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)/);
+    if (m) {
+      const a = Number(m[1].replace(',', '.'));
+      const b = Number(m[2].replace(',', '.'));
+      if (Math.abs(a) <= 90 && Math.abs(b) <= 180) return { lat: a, lng: b };
+      if (Math.abs(b) <= 90 && Math.abs(a) <= 180) return { lat: b, lng: a };
+    }
+    return null;
+  }
+
+  // --- heuristic guessing of lat/lng columns when headers are weird ---
+  function guessLatLngColumns(rows) {
+    if (!rows.length) return { latKey: null, lngKey: null, combineKey: null };
+    const keys = Object.keys(rows[0] || {});
+    const combinedKey = keys.find(k => /коорд|coord|point/i.test(k));
+    if (combinedKey) return { latKey: null, lngKey: null, combineKey: combinedKey };
+
+    const numericKeys = keys.filter(k => {
+      let hits = 0, ok = 0;
+      for (let i = 0; i < Math.min(rows.length, 200); i++) {
+        const v = rows[i][k];
+        if (v == null || v === '') continue;
+        hits++;
+        const n = Number(String(v).replace(',', '.'));
+        if (isFinite(n)) ok++;
+      }
+      return hits && ok / hits > 0.9;
+    });
+
+    function scoreKey(k) {
+      const arr = [];
+      for (let i = 0; i < Math.min(rows.length, 1000); i++) {
+        const v = rows[i][k];
+        if (v == null || v === '') continue;
+        const n = Number(String(v).replace(',', '.'));
+        if (isFinite(n)) arr.push(n);
+      }
+      if (arr.length < 5) return { inLat: 0, inLng: 0, mean: 0 };
+      const mean = arr.reduce((a,b)=>a+b,0)/arr.length;
+      const inLat = arr.filter(n => Math.abs(n) <= 90).length / arr.length;
+      const inLng = arr.filter(n => Math.abs(n) <= 180).length / arr.length;
+      return { inLat, inLng, mean };
+    }
+
+    const scored = numericKeys.map(k => ({ k, ...scoreKey(k) }));
+    const latCand = scored.filter(s => s.inLat > 0.95).sort((a,b)=>Math.abs(45-b.mean)-Math.abs(45-a.mean))[0];
+    const lngCand = scored.filter(s => s.inLng > 0.95).sort((a,b)=>Math.abs(90-b.mean)-Math.abs(90-a.mean))[0];
+
+    if (latCand && lngCand && latCand.k !== lngCand.k) {
+      return { latKey: latCand.k, lngKey: lngCand.k, combineKey: null };
+    }
+    return { latKey: null, lngKey: null, combineKey: null };
+  }
 
   // ---------- Load data ----------
   try{
-    setBadge((isTG?'TG-':'') + 'Грузим точки…');
+    setBadge('Грузим точки…');
     const pointsCsv = await fetchResilient(POINTS_URL);
 
-    setBadge((isTG?'TG-':'') + 'Грузим операторов…');
+    setBadge('Грузим операторов…');
     let opsCsv='', opsOk=true;
     try { opsCsv = await fetchResilient(OPERATORS_URL); }
     catch(e){ opsOk=false; console.warn('Справочник операторов недоступен:', e.message); }
@@ -175,18 +232,37 @@
     const points = Papa.parse(pointsCsv, {header:true, skipEmptyLines:true, transformHeader:h=>(h??'').toString().trim()}).data || [];
     const ops    = opsOk ? (Papa.parse(opsCsv, {header:true, skipEmptyLines:true, transformHeader:h=>(h??'').toString().trim()}).data || []) : [];
 
-    if (!points.length) return fatal('CSV точек пуст или не распознан (в Telegram иногда режется Google Sheets).');
+    if (!points.length) return fatal('CSV точек пуст или не распознан.');
 
-    const pointKeys = Object.keys(points[0]||{});
-    const opKeys    = Object.keys(ops[0]||{});
-    const latKey = detectColumn(pointKeys, ['lat','latitude','широта','y','Lat']);
-    const lngKey = detectColumn(pointKeys, ['lng','lon','longitude','долгота','x','Lon','Long']);
+    // --- detect/guess columns ---
+    const pointKeys = Object.keys(points[0] || {});
+    let latKey = detectColumn(pointKeys, ['lat','latitude','широта','y','Lat','Широта','LAT']);
+    let lngKey = detectColumn(pointKeys, ['lng','lon','longitude','долгота','x','Lon','Long','Долгота','LNG']);
+    let combineKey = null;
+
+    if (!latKey || !lngKey) {
+      const guessed = guessLatLngColumns(points);
+      latKey = latKey || guessed.latKey;
+      lngKey = lngKey || guessed.lngKey;
+      combineKey = guessed.combineKey;
+    }
+
+    if (!latKey && !lngKey && !combineKey) {
+      return fatal('Не найдены колонки lat/lng и не удалось угадать. Проверьте наличие координат в CSV.');
+    }
+
     const operatorKey = detectColumn(pointKeys, ['operator','оператор','отв.пользователь','Оператор']);
-    const nameKey = detectColumn(pointKeys, ['name','название','локация','Location','Адрес']);
-    if (!latKey || !lngKey) return fatal('Не найдены колонки lat/lng в CSV точек.');
+    const nameKey     = detectColumn(pointKeys, ['name','название','локация','Location','Адрес']);
 
+    // --- operator colors ---
+    const opKeys = Object.keys(ops[0]||{});
     const opNameKey  = detectColumn(opKeys, ['operator','оператор','name','имя','ФИО']);
     const opColorKey = detectColumn(opKeys, ['color','цвет','hex','код']);
+
+    const palette=["#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6",
+                   "#bcf60c","#fabebe","#008080","#e6beff","#9A6324","#fffac8","#800000","#aaffc3",
+                   "#808000","#ffd8b1","#000075","#808080","#000000"];
+    let pi=0; const nextColor=()=>palette[(pi++)%palette.length];
 
     const operatorColors = new Map();
     if (opsOk && ops.length && opNameKey){
@@ -197,6 +273,7 @@
       }
     }
 
+    // --- draw markers ---
     const layersByOperator = new Map();
     const countsByOperator = new Map();
     const all = [];
@@ -207,12 +284,21 @@
 
     let ok=0, bad=0;
     for (const r of points){
-      const lat=num(r[latKey]), lng=num(r[lngKey]);
+      let lat, lng;
+      if (combineKey) {
+        const pair = parseCoordsFromCell(r[combineKey]);
+        if (pair) { lat = pair.lat; lng = pair.lng; }
+      } else {
+        lat = num(r[latKey]); lng = num(r[lngKey]);
+      }
       if(!Number.isFinite(lat)||!Number.isFinite(lng)){ bad++; continue; }
+
       const op=norm(r[operatorKey])||'Без оператора';
       const title=norm(r[nameKey])||`${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+
       if(!operatorColors.has(op)) operatorColors.set(op, nextColor());
       const color=operatorColors.get(op);
+
       const m=L.circleMarker([lat,lng], {radius:7, weight:2, opacity:1, color:'#222', fillColor:color, fillOpacity:.85})
         .bindPopup(`<b>${title}</b><br>${op}`);
       layerFor(op).addLayer(m); all.push(m);
@@ -225,7 +311,7 @@
     const uniqueOps=[...countsByOperator.keys()].sort((a,b)=>(countsByOperator.get(b)||0)-(countsByOperator.get(a)||0));
     setBadge(`${uniqueOps.length} операторов • ${ok} точек${bad?` • пропусков: ${bad}`:''}${opsOk?'':' • справочник не загрузился'}`);
 
-    // фильтры
+    // --- filters UI ---
     const opsListEl=document.getElementById('opsList');
     const operatorsCountEl=document.getElementById('operatorsCount');
     operatorsCountEl.textContent=uniqueOps.length;
@@ -255,7 +341,7 @@
     fatal('Не удалось инициализировать: ' + (e?.message||e));
   }
 
-  // панель на мобиле
+  // mobile panel toggle
   const filters=document.getElementById('filters');
   document.getElementById('filtersToggle').addEventListener('click', ()=>filters.classList.toggle('open'));
 })();
