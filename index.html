@@ -1,47 +1,50 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Operators Map — Live</title>
-<style>
-  html, body {height:100%; margin:0;}
-  #map {position:absolute; inset:0; background:#f4f4f4;}
-  .status-badge{
-    position:absolute; top:8px; right:8px; z-index:10000;
-    background:rgba(0,0,0,.8); color:#fff; padding:6px 10px; border-radius:12px;
-    font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; backdrop-filter: blur(3px);
-  }
-  .filters-toggle{
-    position:absolute; top:8px; left:8px; z-index:10001;
-    background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px;
-    font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;
-  }
-  aside#filters{
-    position:absolute; top:52px; left:8px; z-index:1000;
-    width:280px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px);
-    overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px;
-    box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  }
-  #filters h3{margin:4px 6px 8px; font-size:14px;}
-  #filters .muted{color:#666; font-size:12px; margin-left:6px;}
-  #filters .search{margin:6px;}
-  #filters .search input{width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:8px;}
-  #opsList{list-style:none; margin:8px 6px 10px; padding:0;}
-  #opsList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
-  .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px;}
-  .count{margin-left:auto; color:#888; font-size:12px;}
-  @media (max-width:768px){
-    aside#filters{ transform:translateX(-110%); transition:transform .25s ease; }
-    aside#filters.open{ transform:translateX(0); }
-  }
-  noscript, .fatal {
-    position:absolute; inset:auto 8px 8px 8px; z-index:10002;
-    background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px;
-    font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Operators Map — Live v3</title>
+  <style>
+    html, body {height:100%; margin:0;}
+    #map {position:absolute; inset:0; background:#f4f4f4;}
+    .status-badge{
+      position:absolute; top:8px; right:8px; z-index:10000;
+      background:rgba(0,0,0,.8); color:#fff; padding:6px 10px; border-radius:12px;
+      font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; backdrop-filter: blur(3px);
+    }
+    .filters-toggle{
+      position:absolute; top:8px; left:8px; z-index:10001;
+      background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px;
+      font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;
+    }
+    aside#filters{
+      position:absolute; top:52px; left:8px; z-index:1000;
+      width:280px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px);
+      overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px;
+      box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    }
+    #filters h3{margin:4px 6px 8px; font-size:14px;}
+    #filters .muted{color:#666; font-size:12px; margin-left:6px;}
+    #filters .search{margin:6px;}
+    #filters .search input{width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:8px;}
+    #opsList{list-style:none; margin:8px 6px 10px; padding:0;}
+    #opsList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
+    .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px;}
+    .count{margin-left:auto; color:#888; font-size:12px;}
+    @media (max-width:768px){
+      aside#filters{ transform:translateX(-110%); transition:transform .25s ease; }
+      aside#filters.open{ transform:translateX(0); }
+    }
+    noscript, .fatal {
+      position:absolute; inset:auto 8px 8px 8px; z-index:10002;
+      background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px;
+      font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);
+    }
+  </style>
 </head>
 <body>
   <div id="map"></div>
@@ -55,107 +58,141 @@
   <noscript>Нужен JavaScript</noscript>
 
 <script>
+/* ===== Unicode-safe btoa shim (на случай чужих вызовов) ===== */
+(function(){
+  const native = window.btoa ? window.btoa.bind(window) : null;
+  window.btoa = function(s){
+    try { return native ? native(s) : '';
+    } catch(e) {
+      // перекодируем Unicode → Latin1 безопасно
+      const latin1 = unescape(encodeURIComponent(s));
+      return native ? native(latin1) : '';
+    }
+  };
+})();
+
+/* ===== Настройки (публичные CSV) ===== */
+const VERSION = 'v3.1'; // меняйте при выкладке, чтобы сбивать кэш
 const POINTS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?output=csv";
 const OPERATORS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=304610077&single=true&output=csv";
 
 const badge = document.getElementById('statusBadge');
 const setBadge = (msg) => badge.textContent = msg;
 
-// безопасное кодирование строк (работает с кириллицей)
-function safeId(str) {
-  return 'id_' + Array.from(str).map(ch => ch.charCodeAt(0).toString(16)).join('');
-}
-
-async function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
-async function loadStyle(href){return new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=rej;document.head.appendChild(l);});}
-
-await loadStyle("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
-await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js");
-await loadScript("https://unpkg.com/papaparse@5.4.1/papaparse.min.js");
-
-const map = L.map('map').setView([55.75,37.62],9);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-
-async function fetchCsv(url){
-  const r=await fetch(url+'?t='+Date.now());
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const t=await r.text();
-  if(t.startsWith('<!')) throw new Error('HTML вместо CSV');
-  return t;
-}
-
-const num = (v)=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
-const norm = (s)=> (s??'').toString().trim();
-function detectColumn(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}return null;}
+/* ===== Загрузка библиотек ===== */
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src+(src.includes('?')?'&':'?')+VERSION;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+function loadStyle(href){return new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href+(href.includes('?')?'&':'?')+VERSION;l.onload=res;l.onerror=rej;document.head.appendChild(l);});}
 
 (async()=>{
+  await loadStyle("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
+  await loadScript("https://unpkg.com/leaflet@1.9.4/dist/leaflet.js");
+  await loadScript("https://unpkg.com/papaparse@5.4.1/papaparse.min.js");
+
+  /* ===== Карта ===== */
+  const map = L.map('map').setView([55.75,37.62],9);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+
+  /* ===== Fetch CSV ===== */
+  async function fetchCsv(url){
+    const u = url + (url.includes('?')?'&':'?') + 't=' + Date.now();
+    const r = await fetch(u, {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const t = await r.text();
+    if(t.startsWith('<!')) throw new Error('HTML вместо CSV');
+    return t;
+  }
+
+  /* ===== Утилиты ===== */
+  const num = (v)=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
+  const norm = (s)=> (s??'').toString().trim();
+  function detectColumn(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}return null;}
+  // безопасный id из любой строки
+  const safeId = (str)=> 'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
+
+  /* ===== Главный поток ===== */
   try{
     setBadge('Загрузка данных…');
-    const [pointsCsv,opsCsv]=await Promise.all([fetchCsv(POINTS_URL),fetchCsv(OPERATORS_URL)]);
-    const points=Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data;
-    const ops=Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data;
+    const [pointsCsv, opsCsv] = await Promise.all([fetchCsv(POINTS_URL), fetchCsv(OPERATORS_URL)]);
+    const points = Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data;
+    const ops    = Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data;
 
     const pKeys=Object.keys(points[0]||{});
     const oKeys=Object.keys(ops[0]||{});
     const latKey=detectColumn(pKeys,['lat','latitude','широта','y']);
     const lngKey=detectColumn(pKeys,['lng','lon','longitude','долгота','x']);
-    const opKey=detectColumn(pKeys,['operator','оператор']);
-    const nameKey=detectColumn(pKeys,['name','название','локация']);
+    const opKey =detectColumn(pKeys,['operator','оператор','отв.пользователь']);
+    const nameKey=detectColumn(pKeys,['name','название','локация','адрес']);
 
-    const opNameKey=detectColumn(oKeys,['operator','оператор']);
-    const opColorKey=detectColumn(oKeys,['color','цвет']);
+    const opNameKey =detectColumn(oKeys,['operator','оператор','фио','name']);
+    const opColorKey=detectColumn(oKeys,['color','цвет','hex']);
 
     const palette=["#e6194B","#3cb44b","#ffe119","#4363d8","#f58231","#911eb4","#46f0f0","#f032e6","#bcf60c","#fabebe","#008080","#e6beff","#9A6324","#fffac8","#800000","#aaffc3","#808000","#ffd8b1","#000075","#808080","#000000"];
-    let pi=0;const nextColor=()=>palette[(pi++)%palette.length];
+    let pi=0; const nextColor=()=>palette[(pi++)%palette.length];
 
     const opColors=new Map();
-    for(const row of ops){const n=norm(row[opNameKey]);if(!n)continue;opColors.set(n,norm(row[opColorKey])||nextColor());}
+    for(const row of ops){
+      const n=norm(row[opNameKey]); if(!n) continue;
+      opColors.set(n, norm(row[opColorKey]) || nextColor());
+    }
 
-    const layers=new Map(),counts=new Map(),all=[];
-    function layerFor(n){if(!layers.has(n))layers.set(n,L.layerGroup().addTo(map));return layers.get(n);}
+    const layers=new Map(), counts=new Map(), all=[];
+    function layerFor(n){ if(!layers.has(n)) layers.set(n, L.layerGroup().addTo(map)); return layers.get(n); }
+
     let ok=0,bad=0;
     for(const r of points){
-      const lat=num(r[latKey]),lng=num(r[lngKey]);
-      if(!isFinite(lat)||!isFinite(lng)){bad++;continue;}
-      const op=norm(r[opKey])||'Без оператора';
-      const title=norm(r[nameKey])||`${lat.toFixed(4)},${lng.toFixed(4)}`;
-      if(!opColors.has(op))opColors.set(op,nextColor());
+      const lat=num(r[latKey]), lng=num(r[lngKey]);
+      if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
+      const op=norm(r[opKey]) || 'Без оператора';
+      const title=norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+      if(!opColors.has(op)) opColors.set(op, nextColor());
       const color=opColors.get(op);
-      const m=L.circleMarker([lat,lng],{radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.85}).bindPopup(`<b>${title}</b><br>${op}`);
-      layerFor(op).addLayer(m);all.push(m);
-      counts.set(op,(counts.get(op)||0)+1);ok++;
+
+      const m=L.circleMarker([lat,lng],{radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.85})
+          .bindPopup(`<b>${title}</b><br>${op}`);
+      layerFor(op).addLayer(m); all.push(m);
+      counts.set(op,(counts.get(op)||0)+1); ok++;
     }
-    if(all.length){const g=L.featureGroup(all);map.fitBounds(g.getBounds().pad(0.2));}
+
+    if(all.length){ const g=L.featureGroup(all); map.fitBounds(g.getBounds().pad(0.2)); }
+
     const uniqueOps=[...counts.keys()].sort((a,b)=>(counts.get(b)||0)-(counts.get(a)||0));
     setBadge(`${uniqueOps.length} операторов • ${ok} точек${bad?` • пропусков:${bad}`:''}`);
 
     const opsList=document.getElementById('opsList');
     document.getElementById('operatorsCount').textContent=uniqueOps.length;
+
     for(const op of uniqueOps){
       const color=opColors.get(op)||'#999';
       const c=counts.get(op)||0;
-      const safe = safeId(op);
+      const id=safeId(op);
       const li=document.createElement('li');
-      li.innerHTML=`<input type="checkbox" id="${safe}" checked>
-      <span class="swatch" style="background:${color}"></span>
-      <label for="${safe}">${op}</label><span class="count">${c}</span>`;
+      li.innerHTML = `
+        <input type="checkbox" id="${id}" checked>
+        <span class="swatch" style="background:${color}"></span>
+        <label for="${id}">${op}</label>
+        <span class="count">${c}</span>`;
       const cb=li.querySelector('input');
-      cb.onchange=()=>{const layer=layers.get(op);if(cb.checked)layer.addTo(map);else map.removeLayer(layer);};
+      cb.onchange=()=>{ const layer=layers.get(op); if(cb.checked) layer.addTo(map); else map.removeLayer(layer); };
       opsList.appendChild(li);
     }
+
     document.getElementById('opSearch').oninput=(e)=>{
       const q=e.target.value.toLowerCase().trim();
       for(const li of opsList.children){
         const t=li.querySelector('label').textContent.toLowerCase();
-        li.style.display=t.includes(q)?'':'none';
+        li.style.display = t.includes(q) ? '' : 'none';
       }
     };
-  }catch(e){
+
+  } catch(e){
     console.error(e);
-    setBadge('Ошибка: '+(e.message||e));
+    setBadge('Ошибка: ' + (e.message || e));
   }
+
+  // mobile toggle
+  document.getElementById('filtersToggle').onclick=()=>document.getElementById('filters').classList.toggle('open');
 })();
-document.getElementById('filtersToggle').onclick=()=>document.getElementById('filters').classList.toggle('open');
 </script>
 </body>
 </html>
