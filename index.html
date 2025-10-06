@@ -6,7 +6,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ASPGroupMap — управление цветами</title>
+  <title>ASPGroupMap — синхронизируемые цвета</title>
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
@@ -24,7 +24,6 @@
     .toolbar{display:flex; gap:8px; margin:4px 6px 6px; position: sticky; top:92px; background:#fff; z-index:2; padding-bottom:6px;}
     .toolbar button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; font:600 12px; cursor:pointer;}
     .toolbar .secondary{background:#fff;}
-
     #opsList, #techList{list-style:none; margin:8px 6px 10px; padding:0;}
     #opsList li, #techList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
     .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px; cursor:pointer; position:relative;}
@@ -65,21 +64,30 @@
   <noscript>Нужен JavaScript</noscript>
 
 <script type="module">
-/* btoa shim */
+/* страхующий btoa */
 (function(){ const native = window.btoa ? window.btoa.bind(window) : null;
   window.btoa = function(s){ try { return native ? native(s) : ''; } catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; } };
 })();
 
-/* ── Конфиг источников ────────────────────────────────────────────────────── */
+/* ── ИСТОЧНИКИ ДАННЫХ ─────────────────────────────────────────────────────── */
 const DOC_ID = "2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const POINTS_PUB = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=0&single=true&output=csv`;
 const POINTS_EXP = `https://docs.google.com/spreadsheets/d/${DOC_ID}/export?format=csv&id=${DOC_ID}&gid=0`;
 const OPER_PUB   = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=304610077&single=true&output=csv`;
 const OPER_EXP   = `https://docs.google.com/spreadsheets/d/${DOC_ID}/export?format=csv&id=${DOC_ID}&gid=304610077`;
 
-/* ── Утилиты UI/загрузки ──────────────────────────────────────────────────── */
+/* ── СИНХРОНИЗАЦИЯ ЦВЕТОВ ───────────────────────────────────────────────────
+   ВСТАВЬ сюда свой URL веб-приложения Apps Script (оканчивается на /exec) */
+const COLOR_SYNC_URL = 'https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0zQ/exec';
+const ENABLE_SYNC = !!COLOR_SYNC_URL && COLOR_SYNC_URL.startsWith('http');
+// Чтение через прокси (обходит CORS):
+const COLOR_SYNC_GET = ENABLE_SYNC
+  ? 'https://r.jina.ai/http/' + COLOR_SYNC_URL.replace(/^https?:\/\//,'')
+  : '';
+
+/* ── UI/загрузка библиотек ───────────────────────────────────────────────── */
 const badge = document.getElementById('statusBadge');
-const setBadge = (msg) => badge.textContent = msg;
+const setBadge = (m)=>badge.textContent=m;
 function showFatal(title, links){
   setBadge('Ошибка');
   const d=document.createElement('div'); d.className='fatal';
@@ -91,351 +99,232 @@ function showFatal(title, links){
   }
   d.innerHTML = html; document.body.appendChild(d);
 }
-
-function addBuster(u){ return u + (u.includes('?')?'&':'?') + 'v=' + Date.now(); }
-async function loadStyleChain(list){ let last=null; for(const href of list){ try{ await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=addBuster(href);l.onload=res;l.onerror=()=>rej(new Error(href));document.head.appendChild(l);}); return; }catch(e){ last=e; } } throw last||new Error('CSS fail'); }
-async function loadScriptChain(list){ let last=null; for(const src of list){ try{ await new Promise((res,rej)=>{const s=document.createElement('script');s.src=addBuster(src);s.async=true;s.onload=res;s.onerror=()=>rej(new Error(src));document.head.appendChild(s);}); return; }catch(e){ last=e; } } throw last||new Error('JS fail'); }
+function addBuster(u){ return u+(u.includes('?')?'&':'?')+'v='+Date.now(); }
+async function loadStyleChain(list){ let last=null; for(const href of list){ try{ await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=addBuster(href);l.onload=res;l.onerror=()=>rej(new Error(href));document.head.appendChild(l);}); return; }catch(e){ last=e; } } throw last||new Error('css fail'); }
+async function loadScriptChain(list){ let last=null; for(const src of list){ try{ await new Promise((res,rej)=>{const s=document.createElement('script');s.src=addBuster(src);s.async=true;s.onload=res;s.onerror=()=>rej(new Error(src));document.head.appendChild(s);}); return; }catch(e){ last=e; } } throw last||new Error('js fail'); }
 
 setBadge('Грузим библиотеки…');
-await loadStyleChain([
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css'
-]);
-await loadScriptChain([
-  'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js'
-]);
-await loadScriptChain([
-  'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js',
-  'https://unpkg.com/papaparse@5.4.1/papaparse.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js'
-]);
-if(!window.L || !window.Papa){ showFatal('Не загрузились Leaflet/PapaParse.'); throw new Error('libs-missing'); }
+await loadStyleChain(['https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css']);
+await loadScriptChain(['https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js']);
+await loadScriptChain(['https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js','https://unpkg.com/papaparse@5.4.1/papaparse.min.js']);
+if(!window.L||!window.Papa){ showFatal('Не загрузились Leaflet/PapaParse.'); throw new Error('libs-missing'); }
 
 /* ── Карта и pane ─────────────────────────────────────────────────────────── */
-const map = L.map('map', { attributionControl: false }).setView([55.75,37.62],9);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ maxZoom:19, attribution:'© OpenStreetMap contributors' }).addTo(map);
+const map=L.map('map',{attributionControl:false}).setView([55.75,37.62],9);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(map);
 L.control.attribution({prefix:false}).addTo(map);
-map.createPane('techPane');  map.getPane('techPane').style.zIndex = 430;
-map.createPane('opPane');    map.getPane('opPane').style.zIndex   = 450;
+map.createPane('techPane'); map.getPane('techPane').style.zIndex=430;
+map.createPane('opPane');   map.getPane('opPane').style.zIndex=450;
 
-/* ── Загрузка CSV (с прокси и таймаутами) ─────────────────────────────────── */
-const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
-function proxyChain(url){
-  return [ addBuster(url),
-    'https://r.jina.ai/http/' + url.replace(/^https?:\/\//,''),
-    'https://cors.isomorphic-git.org/' + url,
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url) ];
-}
-async function fetchCsvMany(urls, label){
-  let lastErr=null;
+/* ── CSV загрузка (с прокси, таймаутами) ─────────────────────────────────── */
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+function proxyChain(u){ return [addBuster(u),'https://r.jina.ai/http/'+u.replace(/^https?:\/\//,''),'https://cors.isomorphic-git.org/'+u];}
+async function fetchCsvMany(urls,label){
+  let last=null;
   for(const base of urls){
     for(const u of proxyChain(base)){
       try{
         setBadge(`Загрузка ${label}…`);
-        const c=new AbortController(); const t=setTimeout(()=>c.abort(), 12000);
-        const r=await fetch(u,{signal:c.signal,cache:'no-store',credentials:'omit'}); clearTimeout(t);
+        const c=new AbortController(); const t=setTimeout(()=>c.abort(),12000);
+        const r=await fetch(u,{signal:c.signal,cache:'no-store'}); clearTimeout(t);
         if(!r.ok) throw new Error('HTTP '+r.status);
-        const text=await r.text();
-        if(!text || text.length<5) throw new Error('Пустой ответ');
-        if(/^<!doctype|^<html/i.test(text.trim())) throw new Error('HTML вместо CSV');
-        return text;
-      }catch(e){ lastErr=e; await sleep(350); }
+        const txt=await r.text();
+        if(/^<!/i.test(txt)) throw new Error('HTML вместо CSV');
+        if(!txt.trim()) throw new Error('Пустой ответ');
+        return txt;
+      }catch(e){ last=e; await sleep(300); }
     }
   }
-  throw lastErr || new Error('CSV load failed');
+  throw last||new Error('csv fail');
 }
 
-/* ── Мелкие утилиты ───────────────────────────────────────────────────────── */
-const num  = (v)=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
-const norm = (s)=> (s??'').toString().trim();
-function detect(keys, cands){ const lower=keys.map(k=>k.toLowerCase()); for(const c of cands){ const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; } for(const k of keys){ const lk=k.toLowerCase(); if(cands.some(c=>lk.includes(c.toLowerCase()))) return k; } return null; }
-const safeId = (str)=> 'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
-const splitMany = (s)=> norm(s).split(/[,\|;/]/).map(x=>x.trim()).filter(Boolean);
+/* ── Утилиты данных/цвета ────────────────────────────────────────────────── */
+const num = v=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
+const norm= s=> (s??'').toString().trim();
+function detect(keys,cands){ const lower=keys.map(k=>k.toLowerCase()); for(const c of cands){ const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; } for(const k of keys){ const lk=k.toLowerCase(); if(cands.some(c=>lk.includes(c.toLowerCase()))) return k; } return null; }
+const safeId = str=>'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
+const splitMany = s=> norm(s).split(/[,\|;/]/).map(x=>x.trim()).filter(Boolean);
+function djb2(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h)+str.charCodeAt(i); h|=0;} return Math.abs(h); }
+function hslToHex(h,s,l){ h/=360; s/=100; l/=100; const q=l<.5?l*(1+s):l+s-l*s, p=2*l-q; const hr=t=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; }; const r=Math.round(255*hr(h+1/3)), g=Math.round(255*hr(h)), b=Math.round(255*hr(h-1/3)); return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`; }
+function autoColor(key){ const h=djb2(key.toLowerCase()); return hslToHex(h%360, 55+(h%30), 45+((h/7|0)%20)); }
 
-/* ── Стабильные автоцвета + LocalStorage ──────────────────────────────────── */
-const LS_KEY = 'operators-map:colors';
-function loadSaved(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch{ return {}; } }
-function saveColors(obj){ localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
-const savedColors = loadSaved();
+/* ── Локальное хранилище + серверная синхронизация ───────────────────────── */
+const LS_KEY='operators-map:colors';
+function loadLocal(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch{return{}} }
+function saveLocal(obj){ localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
+const savedLocal = loadLocal();
 
-function djb2(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h) + str.charCodeAt(i); h|=0; } return Math.abs(h); }
-function hslToHex(h,s,l){
-  h/=360; s/=100; l/=100;
-  const hue2rgb=(p,q,t)=>{ if(t<0) t+=1; if(t>1) t-=1; if(t<1/6) return p+(q-p)*6*t; if(t<1/2) return q; if(t<2/3) return p+(q-p)*(2/3-t)*6; return p; };
-  const q = l < 0.5 ? l*(1+s) : l+s-l*s;
-  const p = 2*l - q;
-  const r = Math.round(255*hue2rgb(p,q,h+1/3));
-  const g = Math.round(255*hue2rgb(p,q,h));
-  const b = Math.round(255*hue2rgb(p,q,h-1/3));
-  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
+// ЧТЕНИЕ серверных цветов (через прокси — без CORS ошибок)
+async function loadRemoteColors(){
+  if(!ENABLE_SYNC) return {};
+  try{
+    const r = await fetch(COLOR_SYNC_GET, {method:'GET', cache:'no-store'});
+    const text = await r.text();            // r.jina.ai отдаёт «чистый текст JSON»
+    const j = JSON.parse(text);
+    return j && j.ok ? (j.colors||{}) : {};
+  }catch{
+    return {};
+  }
 }
-function autoColor(key){
-  const h = djb2(key.toLowerCase());
-  const hue = h % 360;
-  const sat = 55 + (h % 30);
-  const lig = 45 + (Math.floor(h/7)%20);
-  return hslToHex(hue, sat, lig);
+
+// ЗАПИСЬ (fire-and-forget) — напрямую, но без ожидания ответа
+async function saveRemoteColor(kind, name, color){
+  if(!ENABLE_SYNC) return;
+  try{
+    await fetch(COLOR_SYNC_URL, {
+      method:'POST',
+      mode:'no-cors',                         // важное: не ждём ответ
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({kind, name, color})
+    });
+  }catch{ /* игнор, локально уже сохранено */ }
 }
-function getColor(kind, name, fallback){
+
+function getColor(kind,name, base){
+  const key = `${kind}:${name}`;
+  return savedLocal[key] || base || autoColor(key);
+}
+function setColor(kind,name,hex){
   const key=`${kind}:${name}`;
-  return savedColors[key] || fallback || autoColor(key);
-}
-function setColor(kind, name, hex){
-  savedColors[`${kind}:${name}`]=hex;
-  saveColors(savedColors);
+  savedLocal[key]=hex; saveLocal(savedLocal);
+  saveRemoteColor(kind,name,hex);
 }
 
-/* ── Состояние ────────────────────────────────────────────────────────────── */
-const ST = { opLayers:new Map(), opCounts:new Map(), opList:[], techLayers:new Map(), techCounts:new Map(), techList:[], opColors:new Map(), techColors:new Map() };
+/* ── Состояние/геоутилиты ────────────────────────────────────────────────── */
+const ST={opLayers:new Map(),opCounts:new Map(),opList:[],techLayers:new Map(),techCounts:new Map(),techList:[]};
 function layerFor(mapObj, name){ if(!mapObj.has(name)) mapObj.set(name, L.layerGroup().addTo(map)); return mapObj.get(name); }
-function getVisibleBounds(){
-  const groups=[];
-  for(const [n,lg] of ST.techLayers){ const el=document.getElementById(safeId('tech:'+n)); if(document.getElementById('toggleTech').checked && el?.checked) groups.push(lg); }
-  for(const [n,lg] of ST.opLayers){ const el=document.getElementById(safeId('op:'+n)); if(document.getElementById('toggleOps').checked && el?.checked) groups.push(lg); }
-  if(!groups.length) return null;
-  const fs = groups.map(g=>L.featureGroup(g.getLayers()));
-  return fs.reduce((acc,g)=> acc? acc.extend(g.getBounds()): g.getBounds(), null);
-}
-function animateToVisible(){ const b=getVisibleBounds(); if(b && b.isValid()) map.flyToBounds(b.pad(0.2),{duration:0.8,easeLinearity:0.25}); }
+function getVisibleBounds(){ const groups=[]; for(const [n,lg] of ST.techLayers){ const el=document.getElementById(safeId('tech:'+n)); if(document.getElementById('toggleTech').checked && el?.checked) groups.push(lg);} for(const [n,lg] of ST.opLayers){ const el=document.getElementById(safeId('op:'+n)); if(document.getElementById('toggleOps').checked && el?.checked) groups.push(lg);} if(!groups.length) return null; const fs=groups.map(g=>L.featureGroup(g.getLayers())); return fs.reduce((a,g)=>a?a.extend(g.getBounds()):g.getBounds(),null); }
+function animateToVisible(){ const b=getVisibleBounds(); if(b&&b.isValid()) map.flyToBounds(b.pad(0.2),{duration:.8,easeLinearity:.25}); }
+function triangleMarker(latlng,color){ const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`; const icon=L.divIcon({html:svg,className:'',iconSize:[22,22],iconAnchor:[11,18]}); return L.marker(latlng,{icon,pane:'techPane'}); }
+function recolorTriangleMarker(marker,color){ const el=marker.getElement(); if(el){ const pg=el.querySelector('polygon'); if(pg) pg.setAttribute('fill',color);} }
 
-/* ── Иконка треугольника ──────────────────────────────────────────────────── */
-function triangleMarker(latlng, color){
-  const svg = `<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
-  const icon = L.divIcon({ html: svg, className:'', iconSize:[22,22], iconAnchor:[11,18] });
-  return L.marker(latlng,{ icon, pane:'techPane' });
-}
-function recolorTriangleMarker(marker, color){
-  const el = marker.getElement();
-  if(el){ const svg = el.querySelector('polygon'); if(svg) svg.setAttribute('fill', color); }
-}
-
-/* ── Загрузка и отрисовка ─────────────────────────────────────────────────── */
+/* ── Загрузка данных + отрисовка ─────────────────────────────────────────── */
 try{
-  const pointsCsv = await fetchCsvMany([POINTS_PUB, POINTS_EXP], 'точек');
-  const opsCsv    = await fetchCsvMany([OPER_PUB,   OPER_EXP],   'операторов');
+  // 1) подтянуть серверные цвета заранее (если есть)
+  const remoteColors = await loadRemoteColors();
+  Object.assign(savedLocal, remoteColors); saveLocal(savedLocal);
 
-  const points = Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data || [];
-  const ops    = Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data || [];
-  if(!points.length){ showFatal('CSV точек пуст', [['points (pub)',POINTS_PUB],['points (export)',POINTS_EXP]]); throw new Error('no points'); }
+  // 2) CSV
+  const pointsCsv=await fetchCsvMany([POINTS_PUB,POINTS_EXP],'точек');
+  const opsCsv=await fetchCsvMany([OPER_PUB,OPER_EXP],'операторов');
+  const points=Papa.parse(pointsCsv,{header:true,skipEmptyLines:true}).data||[];
+  const ops=Papa.parse(opsCsv,{header:true,skipEmptyLines:true}).data||[];
+  const pKeys=Object.keys(points[0]||{}), oKeys=Object.keys(ops[0]||{});
+  const latKey=detect(pKeys,['lat','latitude','широта','y']);
+  const lngKey=detect(pKeys,['lng','lon','longitude','долгота','x']);
+  const nameKey=detect(pKeys,['name','название','локация','адрес']);
+  const opKey=detect(pKeys,['operator','оператор','отв.пользователь']);
+  const techKey=detect(pKeys,['technician','tech','тех']);
+  const opNameKey=detect(oKeys,['operator','оператор','фио','name']);
+  const opColorKey=detect(oKeys,['color','цвет','hex']);
+  if(!latKey||!lngKey){ showFatal('Не найдены широта/долгота.',[['points',POINTS_PUB]]); throw new Error('no lat/lng'); }
 
-  const pKeys=Object.keys(points[0]||{});
-  const oKeys=Object.keys(ops[0]||{});
+  // цвета операторов из листа operators (если заданы)
+  const sheetOpColor=new Map();
+  for(const row of ops){ const n=norm(row[opNameKey]); if(!n) continue; const c=norm(row[opColorKey]); if(/^#[0-9A-Fa-f]{6}$/.test(c)) sheetOpColor.set(n,c); }
 
-  const latKey   = detect(pKeys,['lat','latitude','широта','y']);
-  const lngKey   = detect(pKeys,['lng','lon','longitude','долгота','x']);
-  const nameKey  = detect(pKeys,['name','название','локация','адрес']);
-  const opKey    = detect(pKeys,['operator','оператор','отв.пользователь']);
-  const techKey  = detect(pKeys,['technician','tech','тех']);
-
-  const opNameKey = detect(oKeys,['operator','оператор','фио','name']);
-  const opColorKey= detect(oKeys,['color','цвет','hex']);
-
-  if(!latKey || !lngKey){
-    showFatal('Не найдены столбцы широты/долготы.', [['points (pub)',POINTS_PUB],['points (export)',POINTS_EXP]]);
-    throw new Error('no lat/lng');
-  }
-
-  // Операторы: цвет из листа (если есть), затем из localStorage/авто
-  const sheetOpColor = new Map();
-  for(const row of ops){
-    const n = norm(row[opNameKey]); if(!n) continue;
-    const fromSheet = norm(row[opColorKey]);
-    if(fromSheet) sheetOpColor.set(n, fromSheet);
-  }
-
-  let ok=0,bad=0; const all=[];
-  const opsByName=new Map(); const techByName=new Map(); // для быстрого перекраса
-
+  const opsByName=new Map(), techByName=new Map(); let ok=0,bad=0; const all=[];
   for(const r of points){
-    const lat=num(r[latKey]), lng=num(r[lngKey]);
-    if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
-    const title = norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    const lat=num(r[latKey]), lng=num(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
+    const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-    // техники
     if(techKey){
-      const techs = splitMany(r[techKey]);
-      for(const t of techs){
-        if(!t) continue;
-        const color = getColor('tech', t, autoColor('tech:'+t));
-        const m = triangleMarker([lat,lng], color).bindPopup(`<b>${title}</b><br>Техник: ${t}`);
-        layerFor(ST.techLayers, t).addLayer(m);
-        (techByName.get(t) || techByName.set(t,[]), techByName.get(t)).push(m);
+      for(const t of splitMany(r[techKey])){
+        const color=getColor('tech',t,autoColor('tech:'+t));
+        const m=triangleMarker([lat,lng],color).bindPopup(`<b>${title}</b><br>Техник: ${t}`);
+        layerFor(ST.techLayers,t).addLayer(m); (techByName.get(t)||techByName.set(t,[]),techByName.get(t)).push(m);
         ST.techCounts.set(t,(ST.techCounts.get(t)||0)+1); all.push(m);
       }
     }
 
-    // операторы
-    const op = norm(r[opKey]) || 'Без оператора';
-    const base = sheetOpColor.get(op) || autoColor(op);
-    const color = getColor('op', op, base);
-    const m = L.circleMarker([lat,lng],{ pane:'opPane', radius:7, weight:2, color:'#222', fillColor:color, fillOpacity:.9 })
-      .bindPopup(`<b>${title}</b><br>Оператор: ${op}`);
-    layerFor(ST.opLayers, op).addLayer(m);
-    (opsByName.get(op) || opsByName.set(op,[]), opsByName.get(op)).push(m);
+    const op=norm(r[opKey])||'Без оператора';
+    const base=sheetOpColor.get(op)||autoColor(op);
+    const color=getColor('op',op,base);
+    const m=L.circleMarker([lat,lng],{pane:'opPane',radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.9}).bindPopup(`<b>${title}</b><br>Оператор: ${op}`);
+    layerFor(ST.opLayers,op).addLayer(m); (opsByName.get(op)||opsByName.set(op,[]),opsByName.get(op)).push(m);
     ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1); all.push(m); ok++;
   }
-
   if(all.length){ const g=L.featureGroup(all); map.fitBounds(g.getBounds().pad(0.2)); }
 
-  ST.opList   = [...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
-  ST.techList = [...ST.techCounts.keys()].sort((a,b)=>(ST.techCounts.get(b)||0)-(ST.techCounts.get(a)||0));
-
-  document.getElementById('totals').textContent =
-    `${ST.opList.length} операторов • ${ST.techList.length} техников • ${ok} точек${bad?` • пропусков:${bad}`:''}`;
+  ST.opList=[...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
+  ST.techList=[...ST.techCounts.keys()].sort((a,b)=>(ST.techCounts.get(b)||0)-(ST.techCounts.get(a)||0));
+  document.getElementById('totals').textContent=`${ST.opList.length} операторов • ${ST.techList.length} техников • ${ok} точек${bad?` • пропусков:${bad}`:''}`;
   setBadge(`${ST.opList.length} операторов • ${ST.techList.length} техников • ${ok} точек`);
 
-  /* ── списки с цветопикером ─────────────────────────────────────────────── */
-  const opsList = document.getElementById('opsList');
-  const techList= document.getElementById('techList');
+  const opsList=document.getElementById('opsList'), techList=document.getElementById('techList');
 
-  function mountColorSwatch(div, kind, name, initColor){
-    div.style.background = initColor;
-    const input = document.createElement('input');
-    input.type = 'color'; input.value = /^#[0-9A-Fa-f]{6}$/.test(initColor)?initColor:'#888888';
+  function mountColorSwatch(div,kind,name,initColor){
+    div.style.background=initColor;
+    const input=document.createElement('input'); input.type='color';
+    input.value=/^#[0-9A-Fa-f]{6}$/.test(initColor)?initColor:'#888888';
     div.appendChild(input);
 
-    // обычный клик — открыть пикер. Alt-клик — сброс цвета.
-    div.addEventListener('click', (e)=>{
+    // клик — открыть пикер; Alt+клик — сброс к автоцвету (+ синхронизируем)
+    div.addEventListener('click',e=>{
       if(e.altKey){
-        const fallback = kind==='op' ? (sheetOpColor.get(name) || autoColor(name))
-                                     : autoColor('tech:'+name);
-        setColor(kind, name, undefined); delete savedColors[`${kind}:${name}`]; saveColors(savedColors);
-        applyColor(kind, name, fallback);
-        input.value = fallback; div.style.background = fallback;
-      }else{
+        const fb = kind==='op' ? (sheetOpColor.get(name) || autoColor(name))
+                               : autoColor('tech:'+name);
+        delete savedLocal[`${kind}:${name}`]; saveLocal(savedLocal);
+        div.style.background=fb; input.value=fb; applyColor(kind,name,fb);
+        saveRemoteColor(kind,name,fb);
+      } else {
         input.click();
       }
     });
-    input.addEventListener('input', ()=>{
-      const hex = input.value;
-      setColor(kind, name, hex);
-      applyColor(kind, name, hex);
-      div.style.background = hex;
+    input.addEventListener('input',()=>{
+      const hex=input.value;
+      setColor(kind,name,hex); div.style.background=hex; applyColor(kind,name,hex);
     });
   }
 
-  function applyColor(kind, name, hex){
-    if(kind==='op'){
-      const arr = opsByName.get(name)||[];
-      arr.forEach(m=>m.setStyle({fillColor:hex}));
-    }else{
-      const arr = techByName.get(name)||[];
-      arr.forEach(m=>recolorTriangleMarker(m, hex));
-    }
+  function applyColor(kind,name,hex){
+    if(kind==='op'){ (opsByName.get(name)||[]).forEach(m=>m.setStyle({fillColor:hex})); }
+    else{ (techByName.get(name)||[]).forEach(m=>recolorTriangleMarker(m,hex)); }
   }
 
-  function addRow(targetUl, kind, name, color, count, initiallyChecked){
-    const id = safeId(`${kind}:${name}`);
-    const sw = kind==='tech' ? 'swatch tri' : 'swatch';
-    const li = document.createElement('li');
-    li.innerHTML = `<input type="checkbox" id="${id}">
-      <span class="${sw}"></span>
-      <label for="${id}">${name}</label>
-      <span class="count">${count}</span>`;
-    const cb = li.querySelector('input');
-    cb.checked = initiallyChecked;
+  function addRow(targetUl,kind,name,color,count,checked){
+    const id=safeId(`${kind}:${name}`); const sw=kind==='tech'?'swatch tri':'swatch'; const li=document.createElement('li');
+    li.innerHTML=`<input type="checkbox" id="${id}"><span class="${sw}"></span><label for="${id}">${name}</label><span class="count">${count}</span>`;
+    const cb=li.querySelector('input'); cb.checked=checked;
 
-    // смонтировать цветопикер
-    const swatch = li.querySelector('.'+sw.split(' ')[0]);
-    mountColorSwatch(swatch, kind, name, color);
+    mountColorSwatch(li.querySelector('.'+sw.split(' ')[0]),kind,name,color);
 
-    const mapObj = (kind==='tech') ? ST.techLayers : ST.opLayers;
-    const groupOn = (kind==='tech') ? document.getElementById('toggleTech').checked
-                                    : document.getElementById('toggleOps').checked;
-    if (cb.checked && groupOn) mapObj.get(name).addTo(map); else map.removeLayer(mapObj.get(name));
+    const mapObj=kind==='tech'?ST.techLayers:ST.opLayers;
+    const groupOn=kind==='tech'?document.getElementById('toggleTech').checked:document.getElementById('toggleOps').checked;
+    if(cb.checked&&groupOn) mapObj.get(name).addTo(map); else map.removeLayer(mapObj.get(name));
 
-    cb.onchange = () => {
-      const layer = mapObj.get(name);
-      const gOn = (kind==='tech') ? document.getElementById('toggleTech').checked
-                                  : document.getElementById('toggleOps').checked;
-      if(cb.checked && gOn) layer.addTo(map); else map.removeLayer(layer);
-      const b=getVisibleBounds(); if(b&&b.isValid()) map.panInsideBounds(b.pad(0.2));
-    };
+    cb.onchange=()=>{ const layer=mapObj.get(name); const gOn=kind==='tech'?document.getElementById('toggleTech').checked:document.getElementById('toggleOps').checked; if(cb.checked&&gOn) layer.addTo(map); else map.removeLayer(layer); };
     targetUl.appendChild(li);
   }
 
-  const INIT_ITEM_CHECKED = true;
+  const INIT_ITEM_CHECKED=true;
   for(const op of ST.opList){
-    const base = sheetOpColor.get(op) || autoColor(op);
-    const color = getColor('op', op, base);
-    addRow(opsList, 'op', op, color, ST.opCounts.get(op)||0, INIT_ITEM_CHECKED);
+    const base=sheetOpColor.get(op)||autoColor(op);
+    const color=getColor('op',op,base);
+    addRow(opsList,'op',op,color,ST.opCounts.get(op)||0,INIT_ITEM_CHECKED);
   }
   for(const t of ST.techList){
-    const color = getColor('tech', t, autoColor('tech:'+t));
-    addRow(techList, 'tech', t, color, ST.techCounts.get(t)||0, INIT_ITEM_CHECKED);
+    const color=getColor('tech',t,autoColor('tech:'+t));
+    addRow(techList,'tech',t,color,ST.techCounts.get(t)||0,INIT_ITEM_CHECKED);
   }
 
-  /* верхние переключатели групп */
-  const toggleOps  = document.getElementById('toggleOps');
-  const toggleTech = document.getElementById('toggleTech');
-  toggleOps.checked  = true;
-  toggleTech.checked = false;
+  const toggleOps=document.getElementById('toggleOps'), toggleTech=document.getElementById('toggleTech');
+  toggleOps.checked=true; toggleTech.checked=false;
+  function applyTop(){ for(const [n,lg] of ST.opLayers){ const el=document.getElementById(safeId('op:'+n)); if(toggleOps.checked&&el?.checked) lg.addTo(map); else map.removeLayer(lg);} for(const [n,lg] of ST.techLayers){ const el=document.getElementById(safeId('tech:'+n)); if(toggleTech.checked&&el?.checked) lg.addTo(map); else map.removeLayer(lg);} }
+  toggleOps.onchange=applyTop; toggleTech.onchange=applyTop;
 
-  function applyTopToggles(){
-    for(const [n,lg] of ST.opLayers){
-      const el=document.getElementById(safeId('op:'+n));
-      if(toggleOps.checked && el?.checked) lg.addTo(map); else map.removeLayer(lg);
-    }
-    for(const [n,lg] of ST.techLayers){
-      const el=document.getElementById(safeId('tech:'+n));
-      if(toggleTech.checked && el?.checked) lg.addTo(map); else map.removeLayer(lg);
-    }
-  }
-  toggleOps.onchange  = applyTopToggles;
-  toggleTech.onchange = applyTopToggles;
+  let activeTab='ops'; const tabOpsBtn=document.getElementById('tabOps'), tabTechBtn=document.getElementById('tabTech');
+  function setTab(t){ activeTab=t; tabOpsBtn.classList.toggle('active',t==='ops'); tabTechBtn.classList.toggle('active',t==='tech'); opsList.style.display=t==='ops'?'':'none'; techList.style.display=t==='tech'?'':'none'; }
+  tabOpsBtn.onclick=()=>setTab('ops'); tabTechBtn.onclick=()=>setTab('tech');
 
-  /* вкладки */
-  let activeTab='ops';
-  const tabOpsBtn=document.getElementById('tabOps');
-  const tabTechBtn=document.getElementById('tabTech');
-  function setTab(tab){
-    activeTab=tab;
-    tabOpsBtn.classList.toggle('active', tab==='ops');
-    tabTechBtn.classList.toggle('active', tab==='tech');
-    opsList.style.display  = tab==='ops'  ? '' : 'none';
-    techList.style.display = tab==='tech' ? '' : 'none';
-  }
-  tabOpsBtn.onclick = ()=>setTab('ops');
-  tabTechBtn.onclick= ()=>setTab('tech');
-
-  /* массовые кнопки по вкладке */
-  document.getElementById('btnShowAll').onclick=()=>{
-    const list = activeTab==='ops' ? ST.opList : ST.techList;
-    const mapObj = activeTab==='ops' ? ST.opLayers : ST.techLayers;
-    const pref = activeTab==='ops' ? 'op:' : 'tech:';
-    const groupOn = activeTab==='ops' ? toggleOps.checked : toggleTech.checked;
-    for(const name of list){
-      const id=safeId(pref+name), cb=document.getElementById(id);
-      if(cb && !cb.checked){
-        cb.checked=true; if(groupOn) mapObj.get(name).addTo(map);
-      }
-    }
-    animateToVisible();
-  };
-  document.getElementById('btnHideAll').onclick=()=>{
-    const list = activeTab==='ops' ? ST.opList : ST.techList;
-    const mapObj = activeTab==='ops' ? ST.opLayers : ST.techLayers;
-    const pref = activeTab==='ops' ? 'op:' : 'tech:';
-    for(const name of list){
-      const id=safeId(pref+name), cb=document.getElementById(id);
-      if(cb && cb.checked){ cb.checked=false; map.removeLayer(mapObj.get(name)); }
-    }
-  };
+  document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?ST.opList:ST.techList; const mapObj=activeTab==='ops'?ST.opLayers:ST.techLayers; const pref=activeTab==='ops'?'op:':'tech:'; const groupOn=activeTab==='ops'?toggleOps.checked:toggleTech.checked; for(const name of list){ const id=safeId(pref+name),cb=document.getElementById(id); if(cb&&!cb.checked){ cb.checked=true; if(groupOn) mapObj.get(name).addTo(map);} } animateToVisible(); };
+  document.getElementById('btnHideAll').onclick=()=>{ const list=activeTab==='ops'?ST.opList:ST.techList; const mapObj=activeTab==='ops'?ST.opLayers:ST.techLayers; const pref=activeTab==='ops'?'op:':'tech:'; for(const name of list){ const id=safeId(pref+name),cb=document.getElementById(id); if(cb&&cb.checked){ cb.checked=false; map.removeLayer(mapObj.get(name)); } } };
 
 }catch(e){
   console.error(e);
-  showFatal('Не удалось инициализировать: ' + (e.message || e), [
-    ['points (pub)', POINTS_PUB], ['points (export)', POINTS_EXP],
-    ['operators (pub)', OPER_PUB], ['operators (export)', OPER_EXP]
-  ]);
+  showFatal('Не удалось инициализировать: '+(e.message||e),[['points',POINTS_PUB],['operators',OPER_PUB]]);
 }
-
-/* Сворачивание панели */
-document.getElementById('filtersToggle').onclick=()=>{ document.body.classList.toggle('filters-closed'); };
+document.getElementById('filtersToggle').onclick=()=>document.body.classList.toggle('filters-closed');
 </script>
 </body>
 </html>
