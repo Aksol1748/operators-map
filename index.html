@@ -45,7 +45,8 @@
 
     <div class="view-toggle">
       <label><input type="checkbox" id="toggleOps" checked>Операторы</label>
-      <label><input type="checkbox" id="toggleTech" checked>Техники</label>
+      <!-- ВАЖНО: у техников по умолчанию нет checked -->
+      <label><input type="checkbox" id="toggleTech">Техники</label>
     </div>
 
     <div class="tabs">
@@ -223,7 +224,7 @@ try{
     if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
     const title = norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-    // ТЕХНИКИ (сначала собираем — pane ниже)
+    // ТЕХНИКИ: добавляем в слои, но ИЗНАЧАЛЬНО НЕ ПОКАЗЫВАЕМ
     if(techKey){
       const techs = splitMany(r[techKey]);
       for(const t of techs){
@@ -234,7 +235,7 @@ try{
       }
     }
 
-    // ОПЕРАТОРЫ (кружки в opPane, всегда поверх)
+    // ОПЕРАТОРЫ: показываем сразу
     const op = norm(r[opKey]) || 'Без оператора';
     const opColor = opColors.get(op) || (opColors.set(op,nextOp()), opColors.get(op));
     const cm = L.circleMarker([lat,lng],{
@@ -258,17 +259,22 @@ try{
   const opsList = document.getElementById('opsList');
   const techList= document.getElementById('techList');
 
-  function addRow(targetUl, kind, name, color, count){
+  function addRow(targetUl, kind, name, color, count, initiallyChecked){
     const id = safeId(`${kind}:${name}`);
     const sw = kind==='tech' ? 'swatch tri' : 'swatch';
     const li = document.createElement('li');
-    li.innerHTML = `<input type="checkbox" id="${id}" checked>
+    li.innerHTML = `<input type="checkbox" id="${id}">
       <span class="${sw}" style="background:${color}"></span>
       <label for="${id}">${name}</label>
       <span class="count">${count}</span>`;
     const cb = li.querySelector('input');
+    cb.checked = initiallyChecked;
+
+    const mapObj = (kind==='tech') ? ST.techLayers : ST.opLayers;
+    // применяем начальную видимость
+    if (initiallyChecked) mapObj.get(name).addTo(map); else map.removeLayer(mapObj.get(name));
+
     cb.onchange = () => {
-      const mapObj = (kind==='tech') ? ST.techLayers : ST.opLayers;
       const layer = mapObj.get(name);
       if(cb.checked) layer.addTo(map); else map.removeLayer(layer);
       const b=getVisibleBounds(); if(b&&b.isValid()) map.panInsideBounds(b.pad(0.2));
@@ -276,15 +282,33 @@ try{
     targetUl.appendChild(li);
   }
 
-  // по UX логике в списке сначала операторы (как и «выше» на карте)
-  for(const op of ST.opList)  addRow(opsList,  'op',   op,  opColors.get(op)||'#999', ST.opCounts.get(op)||0);
-  for(const t  of ST.techList)addRow(techList, 'tech', t,  colorForTech(t),            ST.techCounts.get(t)||0);
+  // по умолчанию: Операторы включены, Техники выключены
+  const INIT_OPS_CHECKED  = true;
+  const INIT_TECH_CHECKED = false;
 
-  /* переключатели групп */
+  for(const op of ST.opList)  addRow(opsList,  'op',   op,  opColors.get(op)||'#999', ST.opCounts.get(op)||0,  INIT_OPS_CHECKED);
+  for(const t  of ST.techList)addRow(techList, 'tech', t,  colorForTech(t),            ST.techCounts.get(t)||0, INIT_TECH_CHECKED);
+
+  /* переключатели групп (верхние чекбоксы) */
   const toggleOps = document.getElementById('toggleOps');
   const toggleTech= document.getElementById('toggleTech');
-  toggleOps.onchange = ()=>{ for(const [n,lg] of ST.opLayers){ const el=document.getElementById(safeId('op:'+n)); if(toggleOps.checked){ if(el?.checked) lg.addTo(map);} else { map.removeLayer(lg);} } };
-  toggleTech.onchange= ()=>{ for(const [n,lg] of ST.techLayers){ const el=document.getElementById(safeId('tech:'+n)); if(toggleTech.checked){ if(el?.checked) lg.addTo(map);} else { map.removeLayer(lg);} } };
+
+  // привести верхние переключатели к стартовым значениям
+  toggleOps.checked  = INIT_OPS_CHECKED;
+  toggleTech.checked = INIT_TECH_CHECKED;
+
+  toggleOps.onchange = ()=>{ 
+    for(const [n,lg] of ST.opLayers){
+      const el=document.getElementById(safeId('op:'+n));
+      if(toggleOps.checked){ if(el?.checked) lg.addTo(map);} else { map.removeLayer(lg); }
+    }
+  };
+  toggleTech.onchange= ()=>{ 
+    for(const [n,lg] of ST.techLayers){
+      const el=document.getElementById(safeId('tech:'+n));
+      if(toggleTech.checked){ if(el?.checked) lg.addTo(map);} else { map.removeLayer(lg); }
+    }
+  };
 
   /* вкладки */
   let activeTab='ops';
@@ -319,7 +343,7 @@ try{
     const pref = activeTab==='ops' ? 'op:' : 'tech:';
     for(const name of list){
       const id=safeId(pref+name), cb=document.getElementById(id);
-      if(cb && !cb.checked){ cb.checked=true; mapObj.get(name).addTo(map); }
+      if(cb && !cb.checked){ cb.checked=true; if((activeTab==='ops' && toggleOps.checked) || (activeTab==='tech' && toggleTech.checked)) mapObj.get(name).addTo(map); }
     }
     animateToVisible();
   };
