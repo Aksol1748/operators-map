@@ -16,26 +16,31 @@
     body.filters-closed aside#filters { transform: translateX(-110%); }
     #filters h3{margin:4px 6px 6px; font-size:14px; position: sticky; top:0; background:#fff; z-index:4; padding-top:6px;}
     #filters .muted{color:#666; font-size:12px; margin-left:6px;}
+
     .legend{display:flex; gap:10px; align-items:center; padding:6px; font-size:12px; color:#444; position: sticky; top:22px; background:#fff; z-index:3;}
     .legend .dot{width:12px; height:12px; border-radius:50%; border:1px solid #222; background:#bbb; display:inline-block;}
     .legend .tri{width:12px; height:12px; display:inline-block; clip-path: polygon(50% 0%, 0% 100%, 100% 100%); border:1px solid #222; background:#bbb;}
+
     .quick{display:flex; gap:6px; padding:6px; position: sticky; top:44px; background:#fff; z-index:3;}
     .quick button{flex:1 1 33%; padding:6px 8px; border:1px solid #ddd; background:#f7f7f7; border-radius:8px; font:600 12px; cursor:pointer;}
-    .view-toggle{display:flex; gap:10px; align-items:center; padding:6px; position: sticky; top:78px; background:#fff; z-index:3;}
+
+    .view-toggle{display:flex; gap:10px; align-items:center; padding:6px; position: sticky; top:76px; background:#fff; z-index:3;}
     .view-toggle label{display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;}
-    .tabs{display:flex; gap:6px; padding:6px; position: sticky; top:108px; background:#fff; z-index:2;}
+
+    .tabs{display:flex; gap:6px; padding:6px; position: sticky; top:106px; background:#fff; z-index:2;}
     .tabs button{flex:1 1 50%; padding:6px 8px; border:1px solid #ddd; background:#f7f7f7; border-radius:8px; font:600 12px; cursor:pointer;}
     .tabs button.active{background:#fff; border-color:#bbb;}
-    .toolbar{display:flex; gap:8px; margin:4px 6px 6px; position: sticky; top:140px; background:#fff; z-index:2; padding-bottom:6px;}
+
+    .toolbar{display:flex; gap:8px; margin:4px 6px 6px; position: sticky; top:138px; background:#fff; z-index:2; padding-bottom:6px;}
     .toolbar button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; font:600 12px; cursor:pointer;}
     .toolbar .secondary{background:#fff;}
-    .search{margin:6px; position: sticky; top:174px; background:#fff; z-index:2; padding-bottom:6px;}
-    .search input{width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:8px;}
+
     #opsList, #techList{list-style:none; margin:8px 6px 10px; padding:0;}
     #opsList li, #techList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
     .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px;}
     .swatch.tri{border-radius:3px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%);}
     .count{margin-left:auto; color:#888; font-size:12px;}
+
     .fatal {position:absolute; left:8px; right:8px; bottom:8px; z-index:10002; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);}
     .leaflet-control-attribution a[href*="leafletjs.com"]{ display:none !important; }
   </style>
@@ -61,7 +66,6 @@
 
     <div class="view-toggle">
       <label><input type="checkbox" id="toggleOps" checked>Операторы</label>
-      <!-- старт: техники выключены -->
       <label><input type="checkbox" id="toggleTech">Техники</label>
     </div>
 
@@ -74,8 +78,6 @@
       <button id="btnShowAll">Показать всех</button>
       <button id="btnHideAll" class="secondary">Скрыть всех</button>
     </div>
-
-    <div class="search"><input id="searchBox" placeholder="Поиск по активной вкладке…"/></div>
 
     <ul id="opsList"></ul>
     <ul id="techList" style="display:none;"></ul>
@@ -90,7 +92,7 @@
 })();
 
 /* === Док и листы === */
-const DOC_ID = "2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
+const DOC_ID = "2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLн4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP".replace('н','n');
 const POINTS_PUB = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=0&single=true&output=csv`;
 const POINTS_EXP = `https://docs.google.com/spreadsheets/d/${DOC_ID}/export?format=csv&id=${DOC_ID}&gid=0`;
 const OPER_PUB   = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=304610077&single=true&output=csv`;
@@ -197,7 +199,7 @@ function triangleMarker(latlng, color){
   const svg = `<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
     <polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
   const icon = L.divIcon({ html: svg, className:'', iconSize:[22,22], iconAnchor:[11,18] });
-  return L.marker(latlng,{ icon, pane:'techPane' });
+  return L.marker(latlng,{ icon, pane:'techPane' }); // техники — в нижнем pane
 }
 
 try{
@@ -240,7 +242,7 @@ try{
     if(!isFinite(lat)||!isFinite(lng)){ bad++; continue; }
     const title = norm(r[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
 
-    // техники: собираем (по умолчанию не показываем)
+    // техники: добавляем в слои, но по умолчанию не показываем
     if(techKey){
       const techs = splitMany(r[techKey]);
       for(const t of techs){
@@ -251,7 +253,7 @@ try{
       }
     }
 
-    // операторы: показываем сразу
+    // операторы: показываем сразу (pane выше — кружки поверх)
     const op = norm(r[opKey]) || 'Без оператора';
     const opColor = opColors.get(op) || (opColors.set(op,nextOp()), opColors.get(op));
     const cm = L.circleMarker([lat,lng],{ pane:'opPane', radius:7, weight:2, color:'#222', fillColor:opColor, fillOpacity:.9 })
@@ -324,32 +326,19 @@ try{
   let activeTab='ops';
   const tabOpsBtn=document.getElementById('tabOps');
   const tabTechBtn=document.getElementById('tabTech');
-  const searchBox=document.getElementById('searchBox');
   function setTab(tab){
     activeTab=tab;
     tabOpsBtn.classList.toggle('active', tab==='ops');
     tabTechBtn.classList.toggle('active', tab==='tech');
     opsList.style.display  = tab==='ops'  ? '' : 'none';
     techList.style.display = tab==='tech' ? '' : 'none';
-    searchBox.value=''; for(const ul of [opsList, techList]) for(const li of ul.children) li.style.display='';
   }
   tabOpsBtn.onclick = ()=>setTab('ops');
   tabTechBtn.onclick= ()=>setTab('tech');
 
-  /* поиск по активной вкладке */
-  searchBox.oninput=(e)=>{
-    const q=e.target.value.toLowerCase().trim();
-    const ul= activeTab==='ops' ? opsList : techList;
-    for(const li of ul.children){
-      const t=li.querySelector('label').textContent.toLowerCase();
-      li.style.display = t.includes(q) ? '' : 'none';
-    }
-  };
-
   /* быстрый тумблер */
   document.getElementById('qOnlyOps').onclick = ()=>{
     toggleOps.checked = true;  toggleTech.checked = false;
-    // включить все чекбоксы операторов, выключить все у техников
     for(const name of ST.opList){ const cb=document.getElementById(safeId('op:'+name)); if(cb && !cb.checked) cb.checked=true; }
     for(const name of ST.techList){ const cb=document.getElementById(safeId('tech:'+name)); if(cb && cb.checked) cb.checked=false; }
     applyTopToggles(); animateToVisible();
@@ -362,7 +351,6 @@ try{
   };
   document.getElementById('qBoth').onclick = ()=>{
     toggleOps.checked = true;  toggleTech.checked = true;
-    // ничего не меняем у индивидуальных чекбоксов — просто включаем группы
     applyTopToggles(); animateToVisible();
   };
 
