@@ -48,9 +48,7 @@
 
     .route-index{background:#222;color:#fff;border-radius:10px; font:700 11px/16px system-ui; width:16px; height:16px; text-align:center; display:inline-block; transform: translate(-9px,-9px); pointer-events:none;}
 
-    /* мини-лейблы: по умолчанию скрыты; класс на #map включает видимость */
     .leaflet-tooltip.mini-label{
-      opacity:0; transition:opacity .15s ease;
       pointer-events:none;
       background:rgba(255,255,255,.9);
       color:#111; border:1px solid rgba(0,0,0,.15);
@@ -58,7 +56,6 @@
       font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
       box-shadow:0 1px 2px rgba(0,0,0,.08);
     }
-    #map.show-minis .leaflet-tooltip.mini-label{ opacity:1; }
   </style>
 </head>
 <body>
@@ -110,13 +107,7 @@
 
 <script type="module">
 /* btoa-shim */
-(function(){
-  const native = window.btoa ? window.btoa.bind(window) : null;
-  window.btoa = function(s){
-    try { return native ? native(s) : ''; }
-    catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; }
-  };
-})();
+(function(){const n=window.btoa?window.btoa.bind(window):null;window.btoa=function(s){try{return n?n(s):''}catch(e){return n?n(unescape(encodeURIComponent(s))):''}}})();
 
 /* === КОНФИГ === */
 const DOC_ID = "2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
@@ -129,59 +120,28 @@ const COLOR_SYNC_GET = ENABLE_SYNC ? 'https://r.jina.ai/http/' + COLOR_SYNC_URL.
 const badge = document.getElementById('statusBadge');
 const setBadge = (m)=>badge.textContent=m;
 
-async function loadStyle(href){ await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href; l.onload=res; l.onerror=rej; document.head.appendChild(l);}); }
-async function loadScript(src){ await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s);}); }
-function addBuster(u){ return u + (u.includes('?') ? '&' : '?') + 'v=' + Date.now(); }
-async function fetchCsv(url){
-  const r=await fetch(addBuster(url),{cache:'no-store'});
-  if(!r.ok) throw new Error('HTTP '+r.status);
-  const t=await r.text();
-  if(/^</.test(t)) throw new Error('HTML вместо CSV');
-  return t;
-}
+async function loadStyle(href){await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=rej;document.head.appendChild(l);});}
+async function loadScript(src){await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+function addBuster(u){return u+(u.includes('?')?'&':'?')+'v='+Date.now();}
+async function fetchCsv(url){const r=await fetch(addBuster(url),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const t=await r.text();if(/^</.test(t))throw new Error('HTML вместо CSV');return t;}
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
-const num = v=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
-const norm= s=> (s??'').toString().trim();
-function detect(keys,cands){
-  const lower=keys.map(k=>k.toLowerCase());
-  for(const c of cands){ const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; }
-  for(const k of keys){ const lk=k.toLowerCase(); if(cands.some(c=>lk.includes(c.toLowerCase()))) return k; }
-  return null;
-}
-const safeId = str=>'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
-function djb2(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h)+str.charCodeAt(i); h|=0;} return Math.abs(h); }
-function hslToHex(h,s,l){
-  h/=360; s/=100; l/=100;
-  const q = l<.5 ? l*(1+s) : l+s-l*s;
-  const p = 2*l - q;
-  const hr = (t)=>{ if(t<0) t+=1; if(t>1) t-=1;
-    if(t<1/6) return p + (q-p)*6*t;
-    if(t<1/2) return q;
-    if(t<2/3) return p + (q-p)*(2/3 - t)*6;
-    return p;
-  };
-  const r = Math.round(255*hr(h+1/3));
-  const g = Math.round(255*hr(h));
-  const b = Math.round(255*hr(h-1/3));
-  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
-}
-function autoColor(key){ const h=djb2(key.toLowerCase()); return hslToHex(h%360, 55+(h%30), 45+((h/7|0)%20)); }
+const num=v=>typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
+const norm=s=>(s??'').toString().trim();
+function detect(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}for(const k of keys){const lk=k.toLowerCase();if(cands.some(c=>lk.includes(c.toLowerCase())))return k;}return null;}
+const safeId=str=>'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
+function djb2(str){let h=5381;for(let i=0;i<str.length;i++){h=((h<<5)+h)+str.charCodeAt(i);h|=0;}return Math.abs(h);}
+function hslToHex(h,s,l){h/=360;s/=100;l/=100;const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;const hr=t=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};const r=Math.round(255*hr(h+1/3)),g=Math.round(255*hr(h)),b=Math.round(255*hr(h-1/3));return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
+function autoColor(key){const h=djb2(key.toLowerCase());return hslToHex(h%360,55+(h%30),45+((h/7|0)%20));}
 
 /* === СИНХРОН ЦВЕТОВ === */
 const LS_KEY='operators-map:colors';
-function loadLocal(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch{return{}} }
-function saveLocal(obj){ localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
-const savedLocal = loadLocal();
-async function loadRemoteColors(){
-  if(!ENABLE_SYNC) return {};
-  try{ const r=await fetch(COLOR_SYNC_GET,{cache:'no-store'}); const t=await r.text(); const j=JSON.parse(t); return j&&j.ok?(j.colors||{}):{}; }catch{ return {}; }
-}
-async function saveRemoteColor(kind,name,color){
-  if(!ENABLE_SYNC) return;
-  try{ await fetch(COLOR_SYNC_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name,color})}); }catch{}
-}
-function getColor(kind,name,base){ const key=`${kind}:${name}`; return savedLocal[key]||base||autoColor(key); }
-function setColor(kind,name,hex){ const key=`${kind}:${name}`; savedLocal[key]=hex; saveLocal(savedLocal); saveRemoteColor(kind,name,hex); }
+function loadLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch{return{}}}
+function saveLocal(obj){localStorage.setItem(LS_KEY,JSON.stringify(obj));}
+const savedLocal=loadLocal();
+async function loadRemoteColors(){if(!ENABLE_SYNC)return{};try{const r=await fetch(COLOR_SYNC_GET,{cache:'no-store'});const t=await r.text();const j=JSON.parse(t);return j&&j.ok?(j.colors||{}):{};}catch{return{}}}
+async function saveRemoteColor(kind,name,color){if(!ENABLE_SYNC)return;try{await fetch(COLOR_SYNC_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name,color})});}catch{}}
+function getColor(kind,name,base){const key=`${kind}:${name}`;return savedLocal[key]||base||autoColor(key);}
+function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex;saveLocal(savedLocal);saveRemoteColor(kind,name,hex);}
 
 /* === КАРТА === */
 setBadge('Грузим библиотеки…');
@@ -196,102 +156,42 @@ L.control.attribution({prefix:false}).addTo(map);
 map.createPane('techPane'); map.getPane('techPane').style.zIndex=430;
 map.createPane('opPane');   map.getPane('opPane').style.zIndex=450;
 
+/* === ПАРАМЕТРЫ МИНИ-ЛЕЙБЛОВ === */
+const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
+const MINI_ZOOM = IS_MOBILE ? 14 : 13;           // порог зума
+const MAX_MINI_LABELS = IS_MOBILE ? 35 : 60;     // максимально одновременно на экране
+
 /* === СЛОИ / СТАТЫ === */
 const ST={
-  opLayers:new Map(), opCounts:new Map(), opDevices:new Map(), opList:[],
-  techLayers:new Map(), techCounts:new Map(), techDevices:new Map(), techList:[]
+  opLayers:new Map(), opCounts:new Map(), opDevices:new Map(),
+  techLayers:new Map(), techCounts:new Map(), techDevices:new Map(),
+  allMarkers:[]
 };
-function layerFor(mapObj, name){ if(!mapObj.has(name)) mapObj.set(name, L.layerGroup().addTo(map)); return mapObj.get(name); }
-function triangleMarker(latlng,color){
-  const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
-  const icon=L.divIcon({html:svg,className:'',iconSize:[22,22],iconAnchor:[11,18]});
-  return L.marker(latlng,{icon,pane:'techPane'});
-}
-function recolorTriangleMarker(marker,color){
-  const el=marker.getElement(); if(el){ const pg=el.querySelector('polygon'); if(pg) pg.setAttribute('fill',color); }
-}
+function layerFor(mapObj,name){if(!mapObj.has(name))mapObj.set(name,L.layerGroup().addTo(map));return mapObj.get(name);}
+function triangleMarker(latlng,color){const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;const icon=L.divIcon({html:svg,className:'',iconSize:[22,22],iconAnchor:[11,18]});return L.marker(latlng,{icon,pane:'techPane'});}
+function recolorTriangleMarker(marker,color){const el=marker.getElement();if(el){const pg=el.querySelector('polygon');if(pg)pg.setAttribute('fill',color);}}
 
-/* мини-лейблы */
-const MINI_ZOOM = 13;
-function makeMini(marker, title){
-  const tt = L.tooltip({permanent:true, direction:'right', offset:[10,-2], className:'mini-label'}).setContent(title);
-  marker._mini = tt;
+/* ленивые мини-лейблы */
+function ensureMini(marker,title){ if(marker._mini) return marker._mini;
+  marker._mini = L.tooltip({permanent:true, direction:'right', offset:[10,-2], className:'mini-label'}).setContent(title);
+  return marker._mini;
 }
 function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
 function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
 
-/* === OSRM / расчёт === */
-const OSRM = 'https://router.project-osrm.org/route/v1/driving/';
-const KMH_FALLBACK = 30;
-function haversine(a,b){
-  const R=6371; const toRad=d=>d*Math.PI/180;
-  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
-  const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
-  return 2*R*Math.asin(Math.sqrt(s));
-}
-function nnRoute(points){
-  if(points.length<=2) return points.map((p,i)=>({i, ...p}));
-  const used=new Set(), route=[]; let current=0; used.add(current); route.push(points[current]);
-  while(route.length<points.length){
-    let best=-1, bd=1e9, last=route[route.length-1];
-    for(let i=0;i<points.length;i++){ if(used.has(i)) continue; const d=haversine(last, points[i]); if(d<bd){ bd=d; best=i; } }
-    used.add(best); route.push(points[best]);
-  }
-  return route.map((p,i)=>({i, ...p}));
-}
-function twoOpt(route){
-  const n=route.length; if(n<4) return route;
-  const dist=(i,j)=>haversine(route[i], route[j]); let improved=true;
-  while(improved){ improved=false;
-    for(let i=1;i<n-2;i++){ for(let k=i+1;k<n-1;k++){
-      const d1=dist(i-1,i)+dist(k,k+1), d2=dist(i-1,k)+dist(i,k+1);
-      if(d2+1e-9<d1){ const rev=route.slice(i,k+1).reverse(); route=[...route.slice(0,i), ...rev, ...route.slice(k+1)]; improved=true; }
-    } }
-  }
-  return route;
-}
+/* === OSRM / маршрут === */
+const OSRM='https://router.project-osrm.org/route/v1/driving/'; const KMH_FALLBACK=30;
+function haversine(a,b){const R=6371,toRad=d=>d*Math.PI/180;const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng);const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
+function nnRoute(points){if(points.length<=2)return points.map((p,i)=>({i,...p}));const used=new Set(),route=[];let current=0;used.add(current);route.push(points[current]);while(route.length<points.length){let best=-1,bd=1e9,last=route[route.length-1];for(let i=0;i<points.length;i++){if(used.has(i))continue;const d=haversine(last,points[i]);if(d<bd){bd=d;best=i}}used.add(best);route.push(points[best])}return route.map((p,i)=>({i,...p}));}
+function twoOpt(route){const n=route.length;if(n<4)return route;const dist=(i,j)=>haversine(route[i],route[j]);let improved=true;while(improved){improved=false;for(let i=1;i<n-2;i++){for(let k=i+1;k<n-1;k++){const d1=dist(i-1,i)+dist(k,k+1),d2=dist(i-1,k)+dist(i,k+1);if(d2+1e-9<d1){const rev=route.slice(i,k+1).reverse();route=[...route.slice(0,i),...rev,...route.slice(k+1)];improved=true}}}}return route;}
 let routeLayer=null, routeIndices=[];
-function clearRoute(){
-  if(routeLayer){ map.removeLayer(routeLayer); routeLayer=null; }
-  routeIndices.forEach(el=>el.remove()); routeIndices=[];
-  document.getElementById('routeMeta').textContent='Маршрут не построен.';
-  document.getElementById('btnDownload').disabled=true;
-}
-async function osrmEdge(a,b){
-  const url = `${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
-  try{
-    const r = await fetch(url, {cache:'no-store'});
-    if(!r.ok) throw new Error('osrm http '+r.status);
-    const j = await r.json();
-    const route = j.routes && j.routes[0];
-    if(!route) throw new Error('osrm empty');
-    return { geom: route.geometry, distKm: route.distance/1000, durMin: route.duration/60 };
-  }catch(e){
-    const dist = haversine(a,b);
-    return { geom: {type:'LineString', coordinates:[[a.lng,a.lat],[b.lng,b.lat]]}, distKm: dist, durMin: (dist / KMH_FALLBACK) * 60 };
-  }
-}
-async function drawRoadRoute(ordered){
-  if(routeLayer){ map.removeLayer(routeLayer); routeLayer=null; }
-  routeIndices.forEach(el=>el.remove()); routeIndices=[];
-  let totalKm=0, totalMin=0; const features=[];
-  for(let i=1;i<ordered.length;i++){
-    const a=ordered[i-1], b=ordered[i]; const seg = await osrmEdge(a,b);
-    totalKm += seg.distKm; totalMin += seg.durMin;
-    features.push({type:'Feature', geometry: seg.geom, properties:{}});
-    await sleep(120);
-  }
-  const fc = {type:'FeatureCollection', features};
-  routeLayer = L.geoJSON(fc, {style:{color:'#2f80ed', weight:5, opacity:0.9}}).addTo(map);
-  ordered.forEach((p,idx)=>{ const div=L.divIcon({className:'', html:`<div class="route-index">${idx+1}</div>`}); L.marker([p.lat,p.lng],{icon:div, interactive:false, zIndexOffset:1000}).addTo(map); });
-  map.fitBounds(routeLayer.getBounds().pad(0.2));
-  return {totalKm, totalMin};
-}
+function clearRoute(){if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}routeIndices.forEach(el=>el.remove());routeIndices=[];document.getElementById('routeMeta').textContent='Маршрут не построен.';document.getElementById('btnDownload').disabled=true;}
+async function osrmEdge(a,b){const url=`${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('osrm http '+r.status);const j=await r.json();const route=j.routes&&j.routes[0];if(!route)throw new Error('osrm empty');return{geom:route.geometry,distKm:route.distance/1000,durMin:route.duration/60}}catch(e){const dist=haversine(a,b);return{geom:{type:'LineString',coordinates:[[a.lng,a.lat],[b.lng,b.lat]]},distKm:dist,durMin:(dist/KMH_FALLBACK)*60}}}
+async function drawRoadRoute(ordered){if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}routeIndices.forEach(el=>el.remove());routeIndices=[];let totalKm=0,totalMin=0;const features=[];for(let i=1;i<ordered.length;i++){const a=ordered[i-1],b=ordered[i];const seg=await osrmEdge(a,b);totalKm+=seg.distKm;totalMin+=seg.durMin;features.push({type:'Feature',geometry:seg.geom,properties:{}});await sleep(120)}const fc={type:'FeatureCollection',features};routeLayer=L.geoJSON(fc,{style:{color:'#2f80ed',weight:5,opacity:0.9}}).addTo(map);ordered.forEach((p,idx)=>{const div=L.divIcon({className:'',html:`<div class="route-index">${idx+1}</div>`});L.marker([p.lat,p.lng],{icon:div,interactive:false,zIndexOffset:1000}).addTo(map)});map.fitBounds(routeLayer.getBounds().pad(0.2));return{totalKm,totalMin}}
 
-/* === ЗАГРУЗКА «МАРШРУТОВ» === */
+/* === ЗАГРУЗКА ДАННЫХ === */
 try{
-  const remoteColors = await loadRemoteColors();
-  Object.assign(savedLocal, remoteColors); saveLocal(savedLocal);
+  Object.assign(savedLocal, await loadRemoteColors()); saveLocal(savedLocal);
 
   setBadge('Загрузка «Маршрутов»…');
   const csv = await fetchCsv(ROUTES_CSV);
@@ -304,40 +204,38 @@ try{
   const nameKey = detect(keys, ['маршрут всего локации','маршрут','локация','название','адрес','name']);
   const latKey  = detect(keys, ['lat','latitude','широта','y']);
   const lngKey  = detect(keys, ['lng','lon','longitude','долгота','x']);
-
   const dayCols = [
-    {full: detect(keys,['понедельник','monday']),   short:'Пн'},
-    {full: detect(keys,['вторник','tuesday']),     short:'Вт'},
-    {full: detect(keys,['среда','wednesday']),     short:'Ср'},
-    {full: detect(keys,['четверг','thursday']),    short:'Чт'},
-    {full: detect(keys,['пятница','friday']),      short:'Пт'},
-    {full: detect(keys,['суббота','saturday']),    short:'Сб'},
-    {full: detect(keys,['воскресенье','sunday']),  short:'Вс'},
+    {full: detect(keys,['понедельник','monday']), short:'Пн'},
+    {full: detect(keys,['вторник','tuesday']),   short:'Вт'},
+    {full: detect(keys,['среда','wednesday']),   short:'Ср'},
+    {full: detect(keys,['четверг','thursday']),  short:'Чт'},
+    {full: detect(keys,['пятница','friday']),    short:'Пт'},
+    {full: detect(keys,['суббота','saturday']),  short:'Сб'},
+    {full: detect(keys,['воскресенье','sunday']),short:'Вс'},
   ].filter(d=>d.full);
-
   const countCols = keys.filter(k=>/колич|аппарат/i.test(k));
 
   if(!latKey||!lngKey) throw new Error('Не найдены координаты (lat/lng)');
   if(!nameKey) throw new Error('Не найдено название локации');
 
   const opsByName=new Map(), techByName=new Map();
-  const allMarkers=[];
 
   function firstOrMaxCount(row){
-    let best = null;
+    let best=null;
     for(const k of countCols){
-      const v = Number(String(row[k]??'').replace(',','.'));
+      const v=Number(String(row[k]??'').replace(',','.'));
       if(!isFinite(v)) continue;
-      best = best==null? v : Math.max(best, v);
+      best=best==null? v : Math.max(best,v);
     }
     return best;
   }
 
   for(const r of rows){
-    const lat=num(r[latKey]), lng=num(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)) continue;
+    const lat=num(r[latKey]), lng=num(r[lngKey]);
+    if(!isFinite(lat)||!isFinite(lng)) continue;
     const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-    const op   = opKey? norm(r[opKey]) : '';
-    const tech = techKey? norm(r[techKey]) : '';
+    const op   = opKey?  norm(r[opKey])  : '';
+    const tech = techKey?norm(r[techKey]): '';
     const cnt  = firstOrMaxCount(r);
     const days = dayCols.filter(d=>norm(r[d.full])).map(d=>d.short);
     const cntText = cnt!=null ? ` • Аппаратов: ${cnt}` : '';
@@ -349,11 +247,11 @@ try{
       const m=triangleMarker([lat,lng],color)
         .bindTooltip(title,{sticky:true, direction:'top', offset:[0,-10]})
         .bindPopup(`<b>${title}</b><br>Техник: ${tech}${cntText}${daysText}`);
-      makeMini(m,title);
+      m._miniTitle = title;
       lg.addLayer(m);
       ST.techCounts.set(tech,(ST.techCounts.get(tech)||0)+1);
       if(cnt!=null) ST.techDevices.set(tech,(ST.techDevices.get(tech)||0)+cnt);
-      allMarkers.push(m);
+      ST.allMarkers.push(m);
     }
     if(op){
       const color=getColor('op',op,autoColor(op));
@@ -361,20 +259,20 @@ try{
       const m=L.circleMarker([lat,lng],{pane:'opPane',radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.9})
         .bindTooltip(title,{sticky:true, direction:'top', offset:[0,-10]})
         .bindPopup(`<b>${title}</b><br>Оператор: ${op}${cntText}${daysText}`);
-      makeMini(m,title);
+      m._miniTitle = title;
       lg.addLayer(m);
       ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1);
       if(cnt!=null) ST.opDevices.set(op,(ST.opDevices.get(op)||0)+cnt);
-      allMarkers.push(m);
+      ST.allMarkers.push(m);
     }
   }
 
-  if(allMarkers.length){ const g=L.featureGroup(allMarkers); map.fitBounds(g.getBounds().pad(0.2)); }
+  if(ST.allMarkers.length){ const g=L.featureGroup(ST.allMarkers); map.fitBounds(g.getBounds().pad(0.2)); }
 
   const opsList=[...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
   const techList=[...ST.techCounts.keys()].sort((a,b)=>(ST.techCounts.get(b)||0)-(ST.techCounts.get(a)||0));
-  document.getElementById('totals').textContent=`${opsList.length} операторов • ${techList.length} техников • ${allMarkers.length} точек`;
-  setBadge(`${opsList.length} операторов • ${techList.length} техников • ${allMarkers.length} точек`);
+  document.getElementById('totals').textContent=`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`;
+  setBadge(`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`);
 
   const opsUL=document.getElementById('opsList'), techUL=document.getElementById('techList');
 
@@ -386,12 +284,11 @@ try{
     div.addEventListener('click',()=>input.click());
     input.addEventListener('input',()=>{
       const hex=input.value; setColor(kind,name,hex); div.style.background=hex;
-      if(kind==='op'){ (opsByName.get(name)||{}).eachLayer?.(m=>m.setStyle?.({fillColor:hex})); }
-      else { (techByName.get(name)||{}).eachLayer?.(m=>recolorTriangleMarker(m,hex)); }
+      const mapStore = kind==='op'? opsByName: techByName;
+      const layer = mapStore.get(name);
+      layer.eachLayer(m=> kind==='op' ? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
     });
   }
-
-  function forEachMarker(layer, fn){ layer.eachLayer?.(fn); }
 
   function addRow(targetUl,kind,name,count,devices){
     const id=safeId(`${kind}:${name}`); const sw=kind==='tech'?'swatch tri':'swatch';
@@ -406,16 +303,7 @@ try{
     mountColorSwatch(li.querySelector('.swatch'),kind,name,color);
     const layer=(kind==='op'?opsByName:techByName).get(name);
 
-    cb.onchange=()=>{
-      if(cb.checked){
-        layer.addTo(map);
-        // показать мини-лейблы если нужно
-        if(map.getZoom()>=MINI_ZOOM) forEachMarker(layer, showMini);
-      }else{
-        map.removeLayer(layer);
-        forEachMarker(layer, hideMini);
-      }
-    };
+    cb.onchange=()=>{ if(cb.checked) layer.addTo(map); else map.removeLayer(layer); updateMiniLabels(); };
     targetUl.appendChild(li);
   }
 
@@ -424,18 +312,10 @@ try{
 
   const toggleOps=document.getElementById('toggleOps'), toggleTech=document.getElementById('toggleTech');
   toggleOps.checked=true; toggleTech.checked=false;
-
   function applyTop(){
-    for(const [n,lg] of opsByName){
-      const id=safeId(`op:${n}`); const cb=document.getElementById(id);
-      if(toggleOps.checked && cb?.checked){ lg.addTo(map); if(map.getZoom()>=MINI_ZOOM) forEachMarker(lg, showMini); }
-      else { map.removeLayer(lg); forEachMarker(lg, hideMini); }
-    }
-    for(const [n,lg] of techByName){
-      const id=safeId(`tech:${n}`); const cb=document.getElementById(id);
-      if(toggleTech.checked && cb?.checked){ lg.addTo(map); if(map.getZoom()>=MINI_ZOOM) forEachMarker(lg, showMini); }
-      else { map.removeLayer(lg); forEachMarker(lg, hideMini); }
-    }
+    for(const [n,lg] of opsByName){ const id=safeId(`op:${n}`), cb=document.getElementById(id); if(toggleOps.checked && cb?.checked) lg.addTo(map); else map.removeLayer(lg); }
+    for(const [n,lg] of techByName){ const id=safeId(`tech:${n}`), cb=document.getElementById(id); if(toggleTech.checked && cb?.checked) lg.addTo(map); else map.removeLayer(lg); }
+    updateMiniLabels();
   }
   applyTop();
   toggleOps.onchange=applyTop; toggleTech.onchange=applyTop;
@@ -456,24 +336,8 @@ try{
   tabOpsBtn.onclick=()=>setTab('ops'); tabTechBtn.onclick=()=>setTab('tech'); tabRouteBtn.onclick=()=>setTab('route');
 
   // массовые
-  document.getElementById('btnShowAll').onclick=()=>{
-    const list=activeTab==='ops'?opsList:techList;
-    const store=activeTab==='ops'?opsByName:techByName;
-    const pref=activeTab==='ops'?'op:':'tech:';
-    for(const n of list){
-      const id=safeId(pref+n); const cb=document.getElementById(id);
-      if(cb && !cb.checked){ cb.checked=true; store.get(n).addTo(map); if(map.getZoom()>=MINI_ZOOM) forEachMarker(store.get(n), showMini); }
-    }
-  };
-  document.getElementById('btnHideAll').onclick=()=>{
-    const list=activeTab==='ops'?opsList:techList;
-    const store=activeTab==='ops'?opsByName:techByName;
-    const pref=activeTab==='ops'?'op:':'tech:';
-    for(const n of list){
-      const id=safeId(pref+n); const cb=document.getElementById(id);
-      if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); forEachMarker(store.get(n), hideMini); }
-    }
-  };
+  document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; store.get(n).addTo(map);} } updateMiniLabels(); };
+  document.getElementById('btnHideAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); } } updateMiniLabels(); };
 
   // маршруты
   const routeRole=document.getElementById('routeRole'), routeName=document.getElementById('routeName');
@@ -485,46 +349,53 @@ try{
   function collectPoints(kind,name){
     const store = kind==='op' ? opsByName : techByName;
     const layer = store.get(name); if(!layer) return [];
-    const groupOn = kind==='op' ? toggleOps.checked : toggleTech.checked;
-    if(!groupOn) return [];
+    const groupOn = kind==='op' ? toggleOps.checked : toggleTech.checked; if(!groupOn) return [];
     const pts=[]; layer.eachLayer(m=>{ const ll=m.getLatLng(); const nm=(m.getTooltip()?.getContent())||''; pts.push({lat:ll.lat,lng:ll.lng,title:nm}); }); return pts;
   }
   function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
 
-  btnBuild.onclick=async()=>{
-    const kind=routeRole.value, name=routeName.value;
-    if(!name){ routeMeta.textContent='Выберите имя.'; return; }
-    const pts=collectPoints(kind,name);
-    if(pts.length<2){ routeMeta.textContent='Недостаточно точек или слой скрыт.'; clearRoute(); return; }
-    const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX)));
-    setBadge('Маршрут по дорогам…');
-    const {totalKm,totalMin}=await drawRoadRoute(route);
-    setBadge(`${opsList.length} операторов • ${techList.length} техников • ${allMarkers.length} точек`);
-    routeMeta.textContent=`Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`;
-    const csv=toCsv(route); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
-    btnDownload.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=`route_${kind}_${name}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
-    btnDownload.disabled=false; setTab('route');
-  };
+  btnBuild.onclick=async()=>{ const kind=routeRole.value, name=routeName.value; if(!name){ routeMeta.textContent='Выберите имя.'; return; } const pts=collectPoints(kind,name); if(pts.length<2){ routeMeta.textContent='Недостаточно точек или слой скрыт.'; clearRoute(); return; } const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX))); setBadge('Маршрут по дорогам…'); const {totalKm,totalMin}=await drawRoadRoute(route); setBadge(`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`); routeMeta.textContent=`Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`; const csv=toCsv(route); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); btnDownload.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=`route_${kind}_${name}.csv`; document.body.appendChild(a); a.click(); a.remove(); }; btnDownload.disabled=false; setTab('route'); };
   btnClear.onclick=()=>clearRoute();
 
-  /* вкл/выкл мини-лейблов по зуму + видимости слоёв */
+  /* === МИНИ-ЛЕЙБЛЫ: только на крупном масштабе и ограниченное число === */
+  let miniRaf = 0;
   function updateMiniLabels(){
-    const show = map.getZoom() >= MINI_ZOOM;
-    document.getElementById('map').classList.toggle('show-minis', show);
-    const visOp   = toggleOps.checked;
-    const visTech = toggleTech.checked;
-
-    for(const [n,lg] of opsByName){
-      const id=safeId(`op:${n}`); const cb=document.getElementById(id); const on = show && visOp && cb?.checked;
-      lg.eachLayer(m=> on ? showMini(m) : hideMini(m));
-    }
-    for(const [n,lg] of techByName){
-      const id=safeId(`tech:${n}`); const cb=document.getElementById(id); const on = show && visTech && cb?.checked;
-      lg.eachLayer(m=> on ? showMini(m) : hideMini(m));
-    }
+    if(miniRaf) cancelAnimationFrame(miniRaf);
+    miniRaf = requestAnimationFrame(()=>{
+      const showZoom = map.getZoom() >= MINI_ZOOM;
+      // собрать все видимые маркеры (по включённым слоям и чекбоксам)
+      const bounds = map.getBounds();
+      const visible=[];
+      const consider = [
+        ...Array.from(opsByName.entries()).map(([n,lg])=>({lg, id:safeId(`op:${n}`), enabled:toggleOps.checked})),
+        ...Array.from(techByName.entries()).map(([n,lg])=>({lg, id:safeId(`tech:${n}`), enabled:toggleTech.checked}))
+      ];
+      for(const item of consider){
+        const cb=document.getElementById(item.id);
+        const layerOn = item.enabled && cb?.checked;
+        if(!layerOn) continue;
+        item.lg.eachLayer(m=>{
+          if(bounds.contains(m.getLatLng())) visible.push(m);
+          else hideMini(m);
+        });
+      }
+      // слишком далеко — скрыть всё
+      if(!showZoom){ visible.forEach(hideMini); return; }
+      // лимитировать число подписей
+      const limit = Math.min(MAX_MINI_LABELS, visible.length);
+      for(let i=0;i<visible.length;i++){
+        const m = visible[i];
+        if(i<limit){
+          if(!m._mini) ensureMini(m, m._miniTitle||'');
+          showMini(m);
+        }else{
+          hideMini(m);
+        }
+      }
+    });
   }
   updateMiniLabels();
-  map.on('zoomend', updateMiniLabels);
+  map.on('zoomend moveend', updateMiniLabels);
 
 }catch(e){
   console.error(e);
