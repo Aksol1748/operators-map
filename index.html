@@ -10,50 +10,26 @@
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
-
-    .status-badge{
-      position:absolute; top:8px; right:8px; z-index:10000;
-      background:rgba(0,0,0,.85); color:#fff; padding:6px 10px; border-radius:12px;
-      font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    }
-    .filters-toggle{
-      position:absolute; top:8px; left:8px; z-index:10001;
-      background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px;
-      font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;
-    }
-
-    aside#filters{
-      position:absolute; top:52px; left:8px; z-index:1000;
-      width:320px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px);
-      overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px;
-      box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px;
-      font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      transition: transform .25s ease;
-    }
+    .status-badge{position:absolute; top:8px; right:8px; z-index:10000; background:rgba(0,0,0,.85); color:#fff; padding:6px 10px; border-radius:12px; font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    .filters-toggle{position:absolute; top:8px; left:8px; z-index:10001; background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px; font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;}
+    aside#filters{position:absolute; top:52px; left:8px; z-index:1000; width:320px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px); overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px; box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; transition: transform .25s ease;}
     body.filters-closed aside#filters { transform: translateX(-110%); }
-
     #filters h3{margin:4px 6px 6px; font-size:14px; position: sticky; top:0; background:#fff; z-index:3; padding-top:6px;}
     #filters .muted{color:#666; font-size:12px; margin-left:6px;}
-
     .view-toggle{display:flex; gap:10px; align-items:center; padding:6px; position: sticky; top:28px; background:#fff; z-index:3;}
     .view-toggle label{display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;}
-
     .tabs{display:flex; gap:6px; padding:6px; position: sticky; top:60px; background:#fff; z-index:2;}
     .tabs button{flex:1 1 33%; padding:6px 8px; border:1px solid #ddd; background:#f7f7f7; border-radius:8px; font:600 12px; cursor:pointer;}
     .tabs button.active{background:#fff; border-color:#bbb;}
-
     .toolbar{display:flex; gap:8px; margin:4px 6px 6px; position: sticky; top:92px; background:#fff; z-index:2; padding-bottom:6px;}
     .toolbar button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; font:600 12px; cursor:pointer;}
     .toolbar .secondary{background:#fff;}
-
     #opsList, #techList{list-style:none; margin:8px 6px 10px; padding:0;}
     #opsList li, #techList li{display:flex; align-items:center; gap:8px; padding:6px 0;}
     .swatch{width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,.2); flex:0 0 14px; cursor:pointer; position:relative;}
     .swatch.tri{border-radius:3px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%);}
     .swatch input[type="color"]{position:absolute; inset:0; opacity:0; cursor:pointer;}
     .count{margin-left:auto; color:#888; font-size:12px;}
-
     .route-box{border-top:1px dashed #e3e3e3; margin:6px; padding:10px 6px 4px;}
     .route-row{display:flex; gap:8px; margin:6px 0;}
     .route-row select, .route-row button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#fff; font:600 12px; cursor:pointer;}
@@ -61,7 +37,6 @@
     .route-meta{font-size:12px; color:#555; margin:4px 0 0 2px;}
     .route-actions{display:flex; gap:8px; margin:6px 0;}
     .route-actions button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; font:600 12px; cursor:pointer;}
-
     .fatal {position:absolute; left:8px; right:8px; bottom:8px; z-index:10002; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);}
     .leaflet-control-attribution a[href*="leafletjs.com"]{ display:none !important; }
     .route-index{background:#222;color:#fff;border-radius:10px; font:700 11px/16px system-ui; width:16px; height:16px; text-align:center; display:inline-block; transform: translate(-9px,-9px); pointer-events:none;}
@@ -74,23 +49,19 @@
 
   <aside id="filters" aria-label="Фильтры">
     <h3>Списки <span class="muted" id="totals"></span></h3>
-
     <div class="view-toggle">
       <label><input type="checkbox" id="toggleOps" checked>Операторы</label>
       <label><input type="checkbox" id="toggleTech">Техники</label>
     </div>
-
     <div class="tabs">
       <button id="tabOps" class="active">Операторы</button>
       <button id="tabTech">Техники</button>
       <button id="tabRoute">Маршруты</button>
     </div>
-
     <div class="toolbar">
       <button id="btnShowAll">Показать всех</button>
       <button id="btnHideAll" class="secondary">Скрыть всех</button>
     </div>
-
     <ul id="opsList"></ul>
     <ul id="techList" style="display:none;"></ul>
 
@@ -119,30 +90,25 @@
   <noscript>Нужен JavaScript</noscript>
 
 <script type="module">
-/* страховка для btoa */
 (function(){ const native = window.btoa ? window.btoa.bind(window) : null;
   window.btoa = function(s){ try { return native ? native(s) : ''; } catch(e) { return native ? native(unescape(encodeURIComponent(s))) : ''; } };
 })();
 
-/* === КОНФИГ ============================================================ */
-/* ТВОЙ опубликованный CSV листа «Маршруты» */
+/* === КОНФИГ === */
 const DOC_ID = "2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const ROUTES_CSV = `https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
-
-/* Синхронизация цветов (твой GAS) */
 const COLOR_SYNC_URL = 'https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0zQ/exec';
 const ENABLE_SYNC = !!COLOR_SYNC_URL && COLOR_SYNC_URL.startsWith('http');
 const COLOR_SYNC_GET = ENABLE_SYNC ? 'https://r.jina.ai/http/' + COLOR_SYNC_URL.replace(/^https?:\/\//,'') : '';
 
-/* === УТИЛИТЫ / ЗАГРУЗКА =============================================== */
+/* === УТИЛИТЫ === */
 const badge = document.getElementById('statusBadge');
 const setBadge = (m)=>badge.textContent=m;
-
 async function loadStyle(href){ await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href; l.onload=res; l.onerror=rej; document.head.appendChild(l);}); }
 async function loadScript(src){ await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s);}); }
-async function fetchCsv(url){ const r=await fetch(url+'?v='+Date.now(),{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const t=await r.text(); if(/^<!/i.test(t)) throw new Error('HTML вместо CSV'); return t; }
+function addBuster(u){ return u + (u.includes('?') ? '&' : '?') + 'v=' + Date.now(); }
+async function fetchCsv(url){ const r=await fetch(addBuster(url),{cache:'no-store'}); if(!r.ok) throw new Error('HTTP '+r.status); const t=await r.text(); if(/^<!/i.test(t)) throw new Error('HTML вместо CSV'); return t; }
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
-
 const num = v=> typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm= s=> (s??'').toString().trim();
 function detect(keys,cands){ const lower=keys.map(k=>k.toLowerCase()); for(const c of cands){ const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; } for(const k of keys){ const lk=k.toLowerCase(); if(cands.some(c=>lk.includes(c.toLowerCase()))) return k; } return null; }
@@ -151,7 +117,7 @@ function djb2(str){ let h=5381; for(let i=0;i<str.length;i++){ h=((h<<5)+h)+str.
 function hslToHex(h,s,l){ h/=360; s/=100; l/=100; const q=l<.5?l*(1+s):l+s-l*s, p=2*l-q; const hr=t=>{ if(t<0)t+=1; if(t>1)t-=1; if(t<1/6)return p+(q-p)*6*t; if(t<1/2)return q; if(t<2/3)return p+(q-p)*(2/3-t)*6; return p; }; const r=Math.round(255*hr(h+1/3)), g=Math.round(255*hr(h)), b=Math.round(255*hr(h-1/3)); return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`; }
 function autoColor(key){ const h=djb2(key.toLowerCase()); return hslToHex(h%360, 55+(h%30), 45+((h/7|0)%20)); }
 
-/* === СИНХРОН ЦВЕТОВ ==================================================== */
+/* === СИНХРОН ЦВЕТОВ === */
 const LS_KEY='operators-map:colors';
 function loadLocal(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch{return{}} }
 function saveLocal(obj){ localStorage.setItem(LS_KEY, JSON.stringify(obj)); }
@@ -167,7 +133,7 @@ async function saveRemoteColor(kind,name,color){
 function getColor(kind,name,base){ const key=`${kind}:${name}`; return savedLocal[key]||base||autoColor(key); }
 function setColor(kind,name,hex){ const key=`${kind}:${name}`; savedLocal[key]=hex; saveLocal(savedLocal); saveRemoteColor(kind,name,hex); }
 
-/* === КАРТА ============================================================= */
+/* === КАРТА === */
 setBadge('Грузим библиотеки…');
 await loadStyle('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css');
 await loadScript('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js');
@@ -180,7 +146,7 @@ L.control.attribution({prefix:false}).addTo(map);
 map.createPane('techPane'); map.getPane('techPane').style.zIndex=430;
 map.createPane('opPane');   map.getPane('opPane').style.zIndex=450;
 
-/* === РЕЖИМЫ / Слои ===================================================== */
+/* === СЛОИ === */
 const ST={opLayers:new Map(),opCounts:new Map(),opList:[],
           techLayers:new Map(),techCounts:new Map(),techList:[]};
 function layerFor(mapObj, name){ if(!mapObj.has(name)) mapObj.set(name, L.layerGroup().addTo(map)); return mapObj.get(name); }
@@ -189,7 +155,7 @@ function animateToVisible(){ const b=getVisibleBounds(); if(b&&b.isValid()) map.
 function triangleMarker(latlng,color){ const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`; const icon=L.divIcon({html:svg,className:'',iconSize:[22,22],iconAnchor:[11,18]}); return L.marker(latlng,{icon,pane:'techPane'}); }
 function recolorTriangleMarker(marker,color){ const el=marker.getElement(); if(el){ const pg=el.querySelector('polygon'); if(pg) pg.setAttribute('fill',color);} }
 
-/* === OSRM маршруты (как было) ========================================= */
+/* === OSRM МАРШРУТЫ === */
 const OSRM = 'https://router.project-osrm.org/route/v1/driving/';
 const KMH_FALLBACK = 30;
 function haversine(a,b){ const R=6371; const toRad=d=>d*Math.PI/180; const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng); const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
@@ -200,9 +166,8 @@ function clearRoute(){ if(routeLayer){ map.removeLayer(routeLayer); routeLayer=n
 async function osrmEdge(a,b){ const url = `${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`; try{ const r = await fetch(url, {cache:'no-store'}); if(!r.ok) throw new Error('osrm http '+r.status); const j = await r.json(); const route = j.routes && j.routes[0]; if(!route) throw new Error('osrm empty'); return { geom: route.geometry, distKm: route.distance/1000, durMin: route.duration/60 }; }catch(e){ const dist = haversine(a,b); return { geom: {type:'LineString', coordinates:[[a.lng,a.lat],[b.lng,b.lat]]}, distKm: dist, durMin: (dist / KMH_FALLBACK) * 60 }; } }
 async function drawRoadRoute(ordered){ if(routeLayer){ map.removeLayer(routeLayer); routeLayer=null; } routeIndices.forEach(el=>el.remove()); routeIndices=[]; let totalKm=0, totalMin=0; const features=[]; for(let i=1;i<ordered.length;i++){ const a=ordered[i-1], b=ordered[i]; const seg = await osrmEdge(a,b); totalKm += seg.distKm; totalMin += seg.durMin; features.push({type:'Feature', geometry: seg.geom, properties:{}}); await sleep(120); } const fc = {type:'FeatureCollection', features}; routeLayer = L.geoJSON(fc, {style:{color:'#2f80ed', weight:5, opacity:0.9}}).addTo(map); ordered.forEach((p,idx)=>{ const div = L.divIcon({className:'', html:`<div class="route-index">${idx+1}</div>`}); const mrk = L.marker([p.lat,p.lng],{icon:div, interactive:false, zIndexOffset:1000}).addTo(map); routeIndices.push(mrk); }); map.fitBounds(routeLayer.getBounds().pad(0.2)); return {totalKm, totalMin}; }
 
-/* === ЗАГРУЗКА ЛИСТА «МАРШРУТЫ» ======================================== */
+/* === ЗАГРУЗКА «МАРШРУТОВ» === */
 try{
-  // 1) цвета с сервера (если включено)
   const remoteColors = await loadRemoteColors();
   Object.assign(savedLocal, remoteColors); saveLocal(savedLocal);
 
@@ -212,15 +177,12 @@ try{
   if(!rows.length) throw new Error('Пустой CSV');
 
   const keys = Object.keys(rows[0]||{});
-
-  // жёстко под твои заголовки + авто-детект
   const techKey = detect(keys, ['фио техника','technician','tech','техник']);
   const opKey   = detect(keys, ['фио оператора','оператор','fio','name','operator']);
   const nameKey = detect(keys, ['маршрут всего локации','маршрут','локация','название','адрес','name']);
   const latKey  = detect(keys, ['lat','latitude','широта','y']);
   const lngKey  = detect(keys, ['lng','lon','longitude','долгота','x']);
 
-  // дни недели
   const dayCols = [
     {full: detect(keys,['понедельник','monday']),   short:'Пн'},
     {full: detect(keys,['вторник','tuesday']),     short:'Вт'},
@@ -231,12 +193,10 @@ try{
     {full: detect(keys,['воскресенье','sunday']),  short:'Вс'},
   ].filter(d=>d.full);
 
-  // все колонки с количеством аппаратов
   const countCols = keys.filter(k=>/колич|аппарат/i.test(k));
 
   if(!latKey||!lngKey) throw new Error('Не найдены координаты (lat/lng)');
   if(!nameKey) throw new Error('Не найдено название локации');
-  // оператор и техник можем не требовать — markers рисуем по тому, что есть
 
   const opsByName=new Map(), techByName=new Map();
   const STATS={ops:new Map(), tech:new Map()};
@@ -254,15 +214,14 @@ try{
 
   for(const r of rows){
     const lat=num(r[latKey]), lng=num(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)) continue;
-    const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-    const op   = opKey? norm(r[opKey]) : '';
-    const tech = techKey? norm(r[techKey]) : '';
+    const title=(r[nameKey]??'').toString().trim()||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    const op   = opKey? (r[opKey]??'').toString().trim() : '';
+    const tech = techKey? (r[techKey]??'').toString().trim() : '';
     const cnt  = firstOrMaxCount(r);
-    const days = dayCols.filter(d=>norm(r[d.full])).map(d=>d.short);
+    const days = dayCols.filter(d=>String(r[d.full]??'').trim()).map(d=>d.short);
     const cntText = cnt!=null ? ` • Аппаратов: ${cnt}` : '';
     const daysText= days.length ? ` • Обслуживание: ${days.join(', ')}` : '';
 
-    // техник — треугольник
     if(tech){
       const color=getColor('tech',tech,autoColor('tech:'+tech));
       if(!techByName.has(tech)) techByName.set(tech, L.layerGroup().addTo(map));
@@ -271,7 +230,6 @@ try{
       STATS.tech.set(tech,(STATS.tech.get(tech)||0)+1);
       allMarkers.push(m);
     }
-    // оператор — круг
     if(op){
       const color=getColor('op',op,autoColor(op));
       if(!opsByName.has(op)) opsByName.set(op, L.layerGroup().addTo(map));
@@ -290,7 +248,6 @@ try{
   document.getElementById('totals').textContent=`${opsList.length} операторов • ${techList.length} техников • ${allMarkers.length} точек`;
   setBadge(`${opsList.length} операторов • ${techList.length} техников • ${allMarkers.length} точек`);
 
-  // списки + палитры
   const opsUL=document.getElementById('opsList'), techUL=document.getElementById('techList');
   function mountColorSwatch(div,kind,name,initColor){
     div.style.background=initColor; const input=document.createElement('input'); input.type='color';
@@ -314,7 +271,6 @@ try{
   for(const op of opsList){ addRow(opsUL,'op',op,STATS.ops.get(op)||0); }
   for(const t of techList){ addRow(techUL,'tech',t,STATS.tech.get(t)||0); }
 
-  // верхние переключатели групп
   const toggleOps=document.getElementById('toggleOps'), toggleTech=document.getElementById('toggleTech');
   toggleOps.checked=true; toggleTech.checked=false;
   function applyTop(){
@@ -323,7 +279,6 @@ try{
   }
   applyTop(); toggleOps.onchange=applyTop; toggleTech.onchange=applyTop;
 
-  // вкладки
   let activeTab='ops';
   const tabOpsBtn=document.getElementById('tabOps'), tabTechBtn=document.getElementById('tabTech'), tabRouteBtn=document.getElementById('tabRoute');
   const routePanel=document.getElementById('routePanel');
@@ -338,15 +293,14 @@ try{
   }
   tabOpsBtn.onclick=()=>setTab('ops'); tabTechBtn.onclick=()=>setTab('tech'); tabRouteBtn.onclick=()=>setTab('route');
 
-  // массовые кнопки
   document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n); const cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; store.get(n).addTo(map);} } animateToVisible(); };
   document.getElementById('btnHideAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n); const cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); } } };
 
-  /* ===== Маршруты по выбранному ===== */
   const routeRole=document.getElementById('routeRole'), routeName=document.getElementById('routeName');
   function fillRouteNames(){ const list = routeRole.value==='op' ? opsList : techList; routeName.innerHTML = `<option value="" disabled selected>— выберите —</option>` + list.map(n=>`<option>${n}</option>`).join(''); }
   routeRole.onchange=fillRouteNames; fillRouteNames();
 
+  const btnBuild=document.getElementById('btnBuild'), btnClear=document.getElementById('btnClear'), btnDownload=document.getElementById('btnDownload'), routeMeta=document.getElementById('routeMeta');
   function collectPoints(kind,name){
     const store = kind==='op' ? opsByName : techByName;
     const layer = store.get(name); if(!layer) return [];
@@ -354,9 +308,9 @@ try{
     if(!groupOn) return [];
     const pts=[]; layer.eachLayer(m=>{ const ll=m.getLatLng(); const nm=(m.getPopup()?.getContent()?.match(/<b>(.*?)<\/b>/))?RegExp.$1:''; pts.push({lat:ll.lat,lng:ll.lng,title:nm}); }); return pts;
   }
-
-  const btnBuild=document.getElementById('btnBuild'), btnClear=document.getElementById('btnClear'), btnDownload=document.getElementById('btnDownload'), routeMeta=document.getElementById('routeMeta');
   function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
+  async function drawRoadRoute(ordered){ /* уже объявлена выше */ }
+
   btnBuild.onclick=async()=>{ const kind=routeRole.value, name=routeName.value; if(!name){ routeMeta.textContent='Выберите имя.'; return; } const pts=collectPoints(kind,name); if(pts.length<2){ routeMeta.textContent='Недостаточно точек или слой скрыт.'; clearRoute(); return; } const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX))); setBadge('Маршрут по дорогам…'); const {totalKm,totalMin}=await drawRoadRoute(route); setBadge(`${opsList.length} операторов • ${techList.length} техников • ${pts.length} точек`); routeMeta.textContent=`Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`; const csv=toCsv(route); const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob); btnDownload.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=`route_${kind}_${name}.csv`; document.body.appendChild(a); a.click(); a.remove(); }; btnDownload.disabled=false; setTab('route'); };
   btnClear.onclick=()=>clearRoute();
 
@@ -368,7 +322,6 @@ try{
   setBadge('Ошибка');
 }
 
-/* сворачивание панели */
 document.getElementById('filtersToggle').onclick=()=>document.body.classList.toggle('filters-closed');
 </script>
 </body>
