@@ -166,6 +166,16 @@ function ensureMini(marker,title){ if(marker._mini) return marker._mini; marker.
 function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
 function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
 
+/* === DOM ССЫЛКИ ДЛЯ «Маршрутов» (ОБЪЯВЛЕНО РАНО!) === */
+const routeRole=document.getElementById('routeRole'),
+      routeName=document.getElementById('routeName'),
+      routeDay=document.getElementById('routeDay'),
+      dayOnly=document.getElementById('dayOnly'),
+      btnBuild=document.getElementById('btnBuild'),
+      btnClear=document.getElementById('btnClear'),
+      btnDownload=document.getElementById('btnDownload'),
+      routeMeta=document.getElementById('routeMeta');
+
 /* === OSRM / маршрут === */
 const OSRM='https://router.project-osrm.org/route/v1/driving/'; const KMH_FALLBACK=30;
 function haversine(a,b){const R=6371,toRad=d=>d*Math.PI/180;const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng);const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
@@ -176,12 +186,11 @@ function clearRoute(){
   if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
   routeIndices.forEach(el=>el.remove());
   routeIndices=[];
-  document.getElementById('routeMeta').textContent='Маршрут не построен.';
-  document.getElementById('btnDownload').disabled=true;
+  routeMeta.textContent='Маршрут не построен.';
+  btnDownload.disabled=true;
 }
 async function osrmEdge(a,b){const url=`${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('osrm http '+r.status);const j=await r.json();const route=j.routes&&j.routes[0];if(!route)throw new Error('osrm empty');return{geom:route.geometry,distKm:route.distance/1000,durMin:route.duration/60}}catch(e){const dist=haversine(a,b);return{geom:{type:'LineString',coordinates:[[a.lng,a.lat],[b.lng,b.lat]]},distKm:dist,durMin:(dist/KMH_FALLBACK)*60}}}
 async function drawRoadRoute(ordered){
-  // убираем старый маршрут/цифры, даже если пользователь не нажал «Очистить»
   clearRoute();
   let totalKm=0,totalMin=0;const features=[];
   for(let i=1;i<ordered.length;i++){
@@ -189,7 +198,7 @@ async function drawRoadRoute(ordered){
     const seg=await osrmEdge(a,b);
     totalKm+=seg.distKm; totalMin+=seg.durMin;
     features.push({type:'Feature',geometry:seg.geom,properties:{}});
-    await sleep(120);
+    await new Promise(r=>setTimeout(r,120));
   }
   const fc={type:'FeatureCollection',features};
   routeLayer=L.geoJSON(fc,{style:{color:'#2f80ed',weight:5,opacity:0.9}}).addTo(map);
@@ -242,7 +251,7 @@ try{
   function ensureMarkerCommon(m,title,days,color){
     m._miniTitle=title;
     m._days=days||[];
-    m._color=color;           // запомним «правильный» цвет для восстановления
+    m._color=color;
     return m;
   }
 
@@ -302,7 +311,6 @@ try{
       const store=kind==='op'?opsByName:techByName;
       const layer=store.get(name);
       layer.eachLayer(m=> kind==='op'? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
-      // восстановим оригинальный цвет в сохранённом поле
       layer.eachLayer(m=>{ m._color=hex; });
     });
   }
@@ -329,132 +337,6 @@ try{
   const toggleOps=document.getElementById('toggleOps');
   const toggleTech=document.getElementById('toggleTech');
 
-  function applyVisibility(){
-    const opOn=toggleOps.checked, techOn=toggleTech.checked;
-    for(const [,lg] of opsByName) map.removeLayer(lg);
-    for(const [,lg] of techByName) map.removeLayer(lg);
-    if(opOn){ for(const [n,lg] of opsByName){ const cb=document.getElementById(safeId(`op:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
-    if(techOn){ for(const [n,lg] of techByName){ const cb=document.getElementById(safeId(`tech:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
-    updateMiniLabels();
-    applyDayFilter(); // чтобы день продолжал действовать при глобальном переключении
-  }
-  toggleOps.onchange=applyVisibility;
-  toggleTech.onchange=applyVisibility;
-  toggleOps.checked=true; toggleTech.checked=false;
-  applyVisibility();
-
-  /* === ВКЛАДКИ / МАССОВЫЕ КНОПКИ === */
-  let activeTab='ops';
-  const tabOpsBtn=document.getElementById('tabOps'), tabTechBtn=document.getElementById('tabTech'), tabRouteBtn=document.getElementById('tabRoute');
-  const routePanel=document.getElementById('routePanel');
-  function setTab(t){
-    activeTab=t;
-    tabOpsBtn.classList.toggle('active',t==='ops');
-    tabTechBtn.classList.toggle('active',t==='tech');
-    tabRouteBtn.classList.toggle('active',t==='route');
-    document.getElementById('opsList').style.display=t==='ops'?'':'none';
-    document.getElementById('techList').style.display=t==='tech'?'':'none';
-    routePanel.style.display=t==='route'?'':'none';
-  }
-  tabOpsBtn.onclick=()=>setTab('ops'); tabTechBtn.onclick=()=>setTab('tech'); tabRouteBtn.onclick=()=>setTab('route');
-
-  document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; if((activeTab==='ops' && toggleOps.checked) || (activeTab==='tech' && toggleTech.checked)) store.get(n).addTo(map);} } updateMiniLabels(); applyDayFilter(); };
-  document.getElementById('btnHideAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); } } updateMiniLabels(); };
-
-  /* === Маршруты + фильтр дня === */
-  const routeRole=document.getElementById('routeRole'),
-        routeName=document.getElementById('routeName'),
-        routeDay=document.getElementById('routeDay'),
-        dayOnly=document.getElementById('dayOnly'),
-        btnBuild=document.getElementById('btnBuild'),
-        btnClear=document.getElementById('btnClear'),
-        btnDownload=document.getElementById('btnDownload'),
-        routeMeta=document.getElementById('routeMeta');
-
-  function fillRouteNames(){ const list=routeRole.value==='op'?opsList:techList; routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join(''); }
-  routeRole.onchange=()=>{fillRouteNames(); clearRoute();};
-  routeName.onchange=clearRoute;
-
-  function currentDayShort(){
-    const mapDays=['Вс','Пн','Вт','Ср','Чт','Пт','Сб']; // JS: 0=Вс
-    return mapDays[new Date().getDay()];
-  }
-
-  function collectPoints(kind,name,dayFilter){
-    const store=kind==='op'?opsByName:techByName;
-    const layer=store.get(name); if(!layer) return [];
-    const groupOn=kind==='op'?toggleOps.checked:toggleTech.checked; if(!groupOn) return [];
-    const targetDay = dayFilter==='TODAY' ? currentDayShort() : dayFilter;
-    const isAll = (dayFilter==='ALL');
-    const pts=[];
-    layer.eachLayer(m=>{
-      const ll=m.getLatLng();
-      const nm=(m.getTooltip()?.getContent())||'';
-      const days=m._days||[];
-      const allowed = isAll || (days.includes(targetDay));
-      if(allowed) pts.push({lat:ll.lat,lng:ll.lng,title:nm});
-    });
-    return pts;
-  }
-
-  function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
-
-  // визуальный фильтр по дню для ВСЕХ точек на карте
-  function styleForMatch(m,match,hardHide=false){
-    if(m.setStyle){ // круг (оператор)
-      m.setStyle({
-        fillColor: match ? m._color : '#c8c8c8',
-        fillOpacity: hardHide? (match?0.9:0) : (match?0.9:0.15),
-        color:'#222',
-        opacity: hardHide? (match?1:0) : (match?1:0.2)
-      });
-    }else{ // треугольник (техник)
-      const el=m.getElement(); if(!el) return;
-      const pg=el.querySelector('polygon');
-      if(pg) pg.setAttribute('fill', match ? m._color : '#c8c8c8');
-      el.style.opacity = hardHide? (match?1:0) : (match?1:0.35);
-      el.style.pointerEvents = (hardHide && !match) ? 'none' : '';
-    }
-    if(!match) hideMini(m);
-  }
-
-  function applyDayFilter(){
-    const daySel=routeDay.value;
-    const only=dayOnly.checked;
-    const showAll = (daySel==='ALL');
-    const target = daySel==='TODAY' ? currentDayShort() : daySel;
-
-    ST.allMarkers.forEach(m=>{
-      const days=m._days||[];
-      const match = showAll || days.includes(target);
-      styleForMatch(m,match,!showAll && only);
-    });
-    updateMiniLabels();
-    clearRoute(); // чтобы не оставались старые цифры при смене дня
-  }
-
-  routeDay.onchange=applyDayFilter;
-  dayOnly.onchange=applyDayFilter;
-
-  btnBuild.onclick=async()=>{
-    const kind=routeRole.value, name=routeName.value, day=routeDay.value;
-    if(!name){routeMeta.textContent='Выберите имя.';return;}
-    const pts=collectPoints(kind,name,day);
-    if(pts.length<2){routeMeta.textContent='Недостаточно точек по выбранному дню (или слой скрыт).';clearRoute();return;}
-    const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX)));
-    const dayLabel = day==='TODAY' ? `сегодня (${currentDayShort()})` : (day==='ALL'?'все дни':day);
-    setBadge('Маршрут по дорогам…');
-    const {totalKm,totalMin}=await drawRoadRoute(route);
-    setBadge(`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`);
-    routeMeta.textContent=`День: ${dayLabel} • Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`;
-    const csv=toCsv(route);
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
-    btnDownload.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=`route_${kind}_${name}_${day}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
-    btnDownload.disabled=false;
-  };
-  btnClear.onclick=clearRoute;
-
-  /* === Мини-лейблы === */
   function updateMiniLabels(){
     if(miniRaf!==null && cancelAnimationFrame) cancelAnimationFrame(miniRaf);
     miniRaf=requestAnimationFrame(()=>{
@@ -481,6 +363,120 @@ try{
       }
     });
   }
+
+  function applyDayFilter(){
+    if(!routeDay) return; // страховка
+    const daySel=routeDay.value;
+    const only=dayOnly.checked;
+    const showAll = (daySel==='ALL');
+    const target = daySel==='TODAY' ? (['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date().getDay()]) : daySel;
+
+    const styleForMatch=(m,match,hardHide=false)=>{
+      if(m.setStyle){
+        m.setStyle({
+          fillColor: match ? m._color : '#c8c8c8',
+          fillOpacity: hardHide? (match?0.9:0) : (match?0.9:0.15),
+          color:'#222',
+          opacity: hardHide? (match?1:0) : (match?1:0.2)
+        });
+      }else{
+        const el=m.getElement(); if(!el) return;
+        const pg=el.querySelector('polygon');
+        if(pg) pg.setAttribute('fill', match ? m._color : '#c8c8c8');
+        el.style.opacity = hardHide? (match?1:0) : (match?1:0.35);
+        el.style.pointerEvents = (hardHide && !match) ? 'none' : '';
+      }
+      if(!match) hideMini(m);
+    };
+
+    ST.allMarkers.forEach(m=>{
+      const days=m._days||[];
+      const match = showAll || days.includes(target);
+      styleForMatch(m,match,!showAll && only);
+    });
+    updateMiniLabels();
+    clearRoute();
+  }
+
+  function applyVisibility(){
+    const opOn=document.getElementById('toggleOps').checked;
+    const techOn=document.getElementById('toggleTech').checked;
+    for(const [,lg] of opsByName) map.removeLayer(lg);
+    for(const [,lg] of techByName) map.removeLayer(lg);
+    if(opOn){ for(const [n,lg] of opsByName){ const cb=document.getElementById(safeId(`op:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
+    if(techOn){ for(const [n,lg] of techByName){ const cb=document.getElementById(safeId(`tech:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
+    updateMiniLabels();
+    applyDayFilter();
+  }
+  document.getElementById('toggleOps').onchange=applyVisibility;
+  document.getElementById('toggleTech').onchange=applyVisibility;
+  applyVisibility(); // теперь безопасно: routeDay уже объявлен
+
+  /* === ВКЛАДКИ / МАССОВЫЕ КНОПКИ === */
+  let activeTab='ops';
+  const tabOpsBtn=document.getElementById('tabOps'), tabTechBtn=document.getElementById('tabTech'), tabRouteBtn=document.getElementById('tabRoute');
+  const routePanel=document.getElementById('routePanel');
+  function setTab(t){
+    activeTab=t;
+    tabOpsBtn.classList.toggle('active',t==='ops');
+    tabTechBtn.classList.toggle('active',t==='tech');
+    tabRouteBtn.classList.toggle('active',t==='route');
+    document.getElementById('opsList').style.display=t==='ops'?'':'none';
+    document.getElementById('techList').style.display=t==='tech'?'':'none';
+    routePanel.style.display=t==='route'?'':'none';
+  }
+  tabOpsBtn.onclick=()=>setTab('ops'); tabTechBtn.onclick=()=>setTab('tech'); tabRouteBtn.onclick=()=>setTab('route');
+
+  document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()]; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; if((activeTab==='ops' && toggleOps.checked) || (activeTab==='tech' && toggleTech.checked)) store.get(n).addTo(map);} } updateMiniLabels(); applyDayFilter(); };
+  document.getElementById('btnHideAll').onclick=()=>{ const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()]; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); } } updateMiniLabels(); };
+
+  /* === Маршруты === */
+  function fillRouteNames(){ const list=routeRole.value==='op'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()]; routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join(''); }
+  routeRole.onchange=()=>{fillRouteNames(); clearRoute();};
+  routeName.onchange=clearRoute;
+
+  function currentDayShort(){ return ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date().getDay()]; }
+  function collectPoints(kind,name,dayFilter){
+    const store=kind==='op'?opsByName:techByName;
+    const layer=store.get(name); if(!layer) return [];
+    const groupOn=kind==='op'?toggleOps.checked:toggleTech.checked; if(!groupOn) return [];
+    const targetDay = dayFilter==='TODAY' ? currentDayShort() : dayFilter;
+    const isAll = (dayFilter==='ALL');
+    const pts=[];
+    layer.eachLayer(m=>{
+      const ll=m.getLatLng();
+      const nm=(m.getTooltip()?.getContent())||'';
+      const days=m._days||[];
+      const allowed = isAll || (days.includes(targetDay));
+      if(allowed) pts.push({lat:ll.lat,lng:ll.lng,title:nm});
+    });
+    return pts;
+  }
+  function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
+
+  routeDay.onchange=applyDayFilter;
+  dayOnly.onchange=applyDayFilter;
+
+  btnBuild.onclick=async()=>{
+    const kind=routeRole.value, name=routeName.value, day=routeDay.value;
+    if(!name){routeMeta.textContent='Выберите имя.';return;}
+    const pts=collectPoints(kind,name,day);
+    if(pts.length<2){routeMeta.textContent='Недостаточно точек по выбранному дню (или слой скрыт).';clearRoute();return;}
+    const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX)));
+    const dayLabel = day==='TODAY' ? `сегодня (${currentDayShort()})` : (day==='ALL'?'все дни':day);
+    setBadge('Маршрут по дорогам…');
+    const {totalKm,totalMin}=await drawRoadRoute(route);
+    setBadge(`${[...ST.opCounts.keys()].length} операторов • ${[...ST.techCounts.keys()].length} техников • ${ST.allMarkers.length} точек`);
+    routeMeta.textContent=`День: ${dayLabel} • Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`;
+    const csv=toCsv(route);
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+    btnDownload.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=`route_${kind}_${name}_${day}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
+    btnDownload.disabled=false;
+  };
+  btnClear.onclick=clearRoute;
+
+  // стартовые подписи и фильтр дня
+  applyDayFilter();
   updateMiniLabels();
   map.on('zoomend moveend',updateMiniLabels);
 
