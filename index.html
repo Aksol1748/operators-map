@@ -10,13 +10,10 @@
   <style>
     html, body {height:100%; margin:0;}
     #map {position:absolute; inset:0; background:#f4f4f4;}
-
     .status-badge{position:absolute; top:8px; right:8px; z-index:10000; background:rgba(0,0,0,.85); color:#fff; padding:6px 10px; border-radius:12px; font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
     .filters-toggle{position:absolute; top:8px; left:8px; z-index:10001; background:#fff; border:1px solid #ddd; border-radius:10px; padding:8px 10px; font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12); cursor:pointer;}
-
     aside#filters{position:absolute; top:52px; left:8px; z-index:1000; width:320px; max-width:calc(100vw - 16px); max-height:calc(100vh - 60px); overflow:auto; background:#fff; border:1px solid #ddd; border-radius:14px; box-shadow:0 6px 24px rgba(0,0,0,.15); padding:10px; font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; transition: transform .25s ease;}
     body.filters-closed aside#filters { transform: translateX(-110%); }
-
     #filters h3{margin:4px 6px 6px; font-size:14px; position: sticky; top:0; background:#fff; z-index:3; padding-top:6px;}
     #filters .muted{color:#666; font-size:12px; margin-left:6px;}
     .view-toggle{display:flex; gap:10px; align-items:center; padding:6px; position: sticky; top:28px; background:#fff; z-index:3;}
@@ -33,7 +30,6 @@
     .swatch.tri{border-radius:3px; clip-path: polygon(50% 0%, 0% 100%, 100% 100%);}
     .swatch input[type="color"]{position:absolute; inset:0; opacity:0; cursor:pointer;}
     .count{margin-left:auto; color:#888; font-size:12px;}
-
     .route-box{border-top:1px dashed #e3e3e3; margin:6px; padding:10px 6px 4px;}
     .route-row{display:flex; gap:8px; margin:6px 0;}
     .route-row select, .route-row button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#fff; font:600 12px; cursor:pointer;}
@@ -41,13 +37,9 @@
     .route-meta{font-size:12px; color:#555; margin:4px 0 0 2px;}
     .route-actions{display:flex; gap:8px; margin:6px 0;}
     .route-actions button{flex:1 1 auto; padding:6px 8px; border:1px solid #ddd; border-radius:8px; background:#f8f8f8; font:600 12px; cursor:pointer;}
-
     .fatal {position:absolute; left:8px; right:8px; bottom:8px; z-index:10002; background:#fff; border:1px solid #ddd; border-radius:12px; padding:10px; font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif; box-shadow:0 2px 8px rgba(0,0,0,.12);}
-
     .leaflet-control-attribution a[href*="leafletjs.com"]{ display:none !important; }
-
     .route-index{background:#222;color:#fff;border-radius:10px; font:700 11px/16px system-ui; width:16px; height:16px; text-align:center; display:inline-block; transform: translate(-9px,-9px); pointer-events:none;}
-
     .leaflet-tooltip.mini-label{
       pointer-events:none;
       background:rgba(255,255,255,.9);
@@ -119,7 +111,6 @@ const COLOR_SYNC_GET = ENABLE_SYNC ? 'https://r.jina.ai/http/' + COLOR_SYNC_URL.
 /* === УТИЛИТЫ === */
 const badge = document.getElementById('statusBadge');
 const setBadge = (m)=>badge.textContent=m;
-
 async function loadStyle(href){await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=rej;document.head.appendChild(l);});}
 async function loadScript(src){await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 function addBuster(u){return u+(u.includes('?')?'&':'?')+'v='+Date.now();}
@@ -127,7 +118,7 @@ async function fetchCsv(url){const r=await fetch(addBuster(url),{cache:'no-store
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const num=v=>typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm=s=>(s??'').toString().trim();
-function detect(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}for(const k of keys){const lk=k.toLowerCase();if(cands.some(c=>lk.includes(c.toLowerCase())))return k;}return null;}
+function detect(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}for(const k of keys){const lk=k.toLowerCase();if(cands.some(cc=>lk.includes(cc.toLowerCase())))return k;}return null;}
 const safeId=str=>'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
 function djb2(str){let h=5381;for(let i=0;i<str.length;i++){h=((h<<5)+h)+str.charCodeAt(i);h|=0;}return Math.abs(h);}
 function hslToHex(h,s,l){h/=360;s/=100;l/=100;const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;const hr=t=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};const r=Math.round(255*hr(h+1/3)),g=Math.round(255*hr(h)),b=Math.round(255*hr(h-1/3));return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
@@ -158,15 +149,15 @@ map.createPane('opPane');   map.getPane('opPane').style.zIndex=450;
 
 /* === ПАРАМЕТРЫ МИНИ-ЛЕЙБЛОВ === */
 const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
-const MINI_ZOOM = IS_MOBILE ? 14 : 13;           // порог зума
-const MAX_MINI_LABELS = IS_MOBILE ? 35 : 60;     // максимально одновременно на экране
+const MINI_ZOOM = IS_MOBILE ? 14 : 13;
+const MAX_MINI_LABELS = IS_MOBILE ? 35 : 60;
+/* fix: объявляем заранее, чтобы не попасть в TDZ */
+let miniRaf = null;
 
 /* === СЛОИ / СТАТЫ === */
-const ST={
-  opLayers:new Map(), opCounts:new Map(), opDevices:new Map(),
-  techLayers:new Map(), techCounts:new Map(), techDevices:new Map(),
-  allMarkers:[]
-};
+const ST={ opLayers:new Map(), opCounts:new Map(), opDevices:new Map(),
+           techLayers:new Map(), techCounts:new Map(), techDevices:new Map(),
+           allMarkers:[] };
 function layerFor(mapObj,name){if(!mapObj.has(name))mapObj.set(name,L.layerGroup().addTo(map));return mapObj.get(name);}
 function triangleMarker(latlng,color){const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;const icon=L.divIcon({html:svg,className:'',iconSize:[22,22],iconAnchor:[11,18]});return L.marker(latlng,{icon,pane:'techPane'});}
 function recolorTriangleMarker(marker,color){const el=marker.getElement();if(el){const pg=el.querySelector('polygon');if(pg)pg.setAttribute('fill',color);}}
@@ -214,12 +205,10 @@ try{
     {full: detect(keys,['воскресенье','sunday']),short:'Вс'},
   ].filter(d=>d.full);
   const countCols = keys.filter(k=>/колич|аппарат/i.test(k));
-
   if(!latKey||!lngKey) throw new Error('Не найдены координаты (lat/lng)');
   if(!nameKey) throw new Error('Не найдено название локации');
 
   const opsByName=new Map(), techByName=new Map();
-
   function firstOrMaxCount(row){
     let best=null;
     for(const k of countCols){
@@ -231,8 +220,7 @@ try{
   }
 
   for(const r of rows){
-    const lat=num(r[latKey]), lng=num(r[lngKey]);
-    if(!isFinite(lat)||!isFinite(lng)) continue;
+    const lat=num(r[latKey]), lng=num(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)) continue;
     const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     const op   = opKey?  norm(r[opKey])  : '';
     const tech = techKey?norm(r[techKey]): '';
@@ -302,7 +290,6 @@ try{
     const color=getColor(kind,name,autoColor(kind==='op'?name:'tech:'+name));
     mountColorSwatch(li.querySelector('.swatch'),kind,name,color);
     const layer=(kind==='op'?opsByName:techByName).get(name);
-
     cb.onchange=()=>{ if(cb.checked) layer.addTo(map); else map.removeLayer(layer); updateMiniLabels(); };
     targetUl.appendChild(li);
   }
@@ -311,14 +298,12 @@ try{
   for(const t of techList){ addRow(techUL,'tech',t,ST.techCounts.get(t)||0, ST.techDevices.get(t)||0); }
 
   const toggleOps=document.getElementById('toggleOps'), toggleTech=document.getElementById('toggleTech');
-  toggleOps.checked=true; toggleTech.checked=false;
   function applyTop(){
     for(const [n,lg] of opsByName){ const id=safeId(`op:${n}`), cb=document.getElementById(id); if(toggleOps.checked && cb?.checked) lg.addTo(map); else map.removeLayer(lg); }
     for(const [n,lg] of techByName){ const id=safeId(`tech:${n}`), cb=document.getElementById(id); if(toggleTech.checked && cb?.checked) lg.addTo(map); else map.removeLayer(lg); }
     updateMiniLabels();
   }
-  applyTop();
-  toggleOps.onchange=applyTop; toggleTech.onchange=applyTop;
+  toggleOps.checked=true; toggleTech.checked=false; applyTop();
 
   // вкладки
   let activeTab='ops';
@@ -345,7 +330,6 @@ try{
   routeRole.onchange=fillRouteNames; fillRouteNames();
 
   const btnBuild=document.getElementById('btnBuild'), btnClear=document.getElementById('btnClear'), btnDownload=document.getElementById('btnDownload'), routeMeta=document.getElementById('routeMeta');
-
   function collectPoints(kind,name){
     const store = kind==='op' ? opsByName : techByName;
     const layer = store.get(name); if(!layer) return [];
@@ -358,30 +342,27 @@ try{
   btnClear.onclick=()=>clearRoute();
 
   /* === МИНИ-ЛЕЙБЛЫ: только на крупном масштабе и ограниченное число === */
-  let miniRaf = 0;
   function updateMiniLabels(){
-    if(miniRaf) cancelAnimationFrame(miniRaf);
-    miniRaf = requestAnimationFrame(()=>{
+    if(miniRaf!==null && window.cancelAnimationFrame) cancelAnimationFrame(miniRaf);
+    miniRaf = window.requestAnimationFrame ? requestAnimationFrame(run) : (run(), null);
+    function run(){
       const showZoom = map.getZoom() >= MINI_ZOOM;
-      // собрать все видимые маркеры (по включённым слоям и чекбоксам)
       const bounds = map.getBounds();
       const visible=[];
       const consider = [
-        ...Array.from(opsByName.entries()).map(([n,lg])=>({lg, id:safeId(`op:${n}`), enabled:toggleOps.checked})),
-        ...Array.from(techByName.entries()).map(([n,lg])=>({lg, id:safeId(`tech:${n}`), enabled:toggleTech.checked}))
+        ...Array.from(opsByName.entries()).map(([n,lg])=>({lg, id:safeId(`op:${n}`), enabled:document.getElementById('toggleOps').checked})),
+        ...Array.from(techByName.entries()).map(([n,lg])=>({lg, id:safeId(`tech:${n}`), enabled:document.getElementById('toggleTech').checked}))
       ];
       for(const item of consider){
         const cb=document.getElementById(item.id);
         const layerOn = item.enabled && cb?.checked;
-        if(!layerOn) continue;
+        if(!layerOn){ item.lg.eachLayer(hideMini); continue; }
         item.lg.eachLayer(m=>{
           if(bounds.contains(m.getLatLng())) visible.push(m);
           else hideMini(m);
         });
       }
-      // слишком далеко — скрыть всё
       if(!showZoom){ visible.forEach(hideMini); return; }
-      // лимитировать число подписей
       const limit = Math.min(MAX_MINI_LABELS, visible.length);
       for(let i=0;i<visible.length;i++){
         const m = visible[i];
@@ -392,7 +373,7 @@ try{
           hideMini(m);
         }
       }
-    });
+    }
   }
   updateMiniLabels();
   map.on('zoomend moveend', updateMiniLabels);
