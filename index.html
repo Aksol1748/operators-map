@@ -31,7 +31,9 @@
   .count{margin-left:auto;color:#888;font-size:12px}
   .route-box{border-top:1px dashed #e3e3e3;margin:6px;padding:10px 6px 4px}
   .route-row{display:flex;gap:8px;margin:6px 0}
-  .route-row select,.route-row button{flex:1 1 auto;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#fff;font:600 12px;cursor:pointer}
+  .route-row select,.route-row button,.route-row label{flex:1 1 auto;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#fff;font:600 12px;cursor:pointer}
+  .route-row label{display:flex;align-items:center;gap:8px}
+  .route-row button{cursor:pointer}
   .route-row button.primary{background:#2f80ed;color:#fff;border-color:#2f80ed}
   .route-meta{font-size:12px;color:#555;margin:4px 0 0 2px}
   .route-actions{display:flex;gap:8px;margin:6px 0}
@@ -75,19 +77,16 @@
         <option value="" selected disabled>— выберите —</option>
       </select>
     </div>
-    <!-- NEW: day filter -->
     <div class="route-row">
       <select id="routeDay">
         <option value="TODAY" selected>Сегодня</option>
         <option value="ALL">Все дни</option>
-        <option value="Пн">Пн</option>
-        <option value="Вт">Вт</option>
-        <option value="Ср">Ср</option>
-        <option value="Чт">Чт</option>
-        <option value="Пт">Пт</option>
-        <option value="Сб">Сб</option>
-        <option value="Вс">Вс</option>
+        <option value="Пн">Пн</option><option value="Вт">Вт</option><option value="Ср">Ср</option>
+        <option value="Чт">Чт</option><option value="Пт">Пт</option><option value="Сб">Сб</option><option value="Вс">Вс</option>
       </select>
+      <label for="dayOnly"><input id="dayOnly" type="checkbox" checked> только этот день</label>
+    </div>
+    <div class="route-row">
       <button id="btnBuild" class="primary">Построить маршрут</button>
       <button id="btnClear">Очистить</button>
     </div>
@@ -173,9 +172,34 @@ function haversine(a,b){const R=6371,toRad=d=>d*Math.PI/180;const dLat=toRad(b.l
 function nnRoute(points){if(points.length<=2)return points.map((p,i)=>({i,...p}));const used=new Set(),route=[];let current=0;used.add(current);route.push(points[current]);while(route.length<points.length){let best=-1,bd=1e9,last=route[route.length-1];for(let i=0;i<points.length;i++){if(used.has(i))continue;const d=haversine(last,points[i]);if(d<bd){bd=d;best=i}}used.add(best);route.push(points[best])}return route.map((p,i)=>({i,...p}));}
 function twoOpt(route){const n=route.length;if(n<4)return route;const dist=(i,j)=>haversine(route[i],route[j]);let improved=true;while(improved){improved=false;for(let i=1;i<n-2;i++){for(let k=i+1;k<n-1;k++){const d1=dist(i-1,i)+dist(k,k+1),d2=dist(i-1,k)+dist(i,k+1);if(d2+1e-9<d1){const rev=route.slice(i,k+1).reverse();route=[...route.slice(0,i),...rev,...route.slice(k+1)];improved=true}}}}return route;}
 let routeLayer=null,routeIndices=[];
-function clearRoute(){if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}routeIndices.forEach(el=>el.remove());routeIndices=[];document.getElementById('routeMeta').textContent='Маршрут не построен.';document.getElementById('btnDownload').disabled=true;}
+function clearRoute(){
+  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
+  routeIndices.forEach(el=>el.remove());
+  routeIndices=[];
+  document.getElementById('routeMeta').textContent='Маршрут не построен.';
+  document.getElementById('btnDownload').disabled=true;
+}
 async function osrmEdge(a,b){const url=`${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('osrm http '+r.status);const j=await r.json();const route=j.routes&&j.routes[0];if(!route)throw new Error('osrm empty');return{geom:route.geometry,distKm:route.distance/1000,durMin:route.duration/60}}catch(e){const dist=haversine(a,b);return{geom:{type:'LineString',coordinates:[[a.lng,a.lat],[b.lng,b.lat]]},distKm:dist,durMin:(dist/KMH_FALLBACK)*60}}}
-async function drawRoadRoute(ordered){if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}routeIndices.forEach(el=>el.remove());routeIndices=[];let totalKm=0,totalMin=0;const features=[];for(let i=1;i<ordered.length;i++){const a=ordered[i-1],b=ordered[i];const seg=await osrmEdge(a,b);totalKm+=seg.distKm;totalMin+=seg.durMin;features.push({type:'Feature',geometry:seg.geom,properties:{}});await sleep(120)}const fc={type:'FeatureCollection',features};routeLayer=L.geoJSON(fc,{style:{color:'#2f80ed',weight:5,opacity:0.9}}).addTo(map);ordered.forEach((p,idx)=>{const div=L.divIcon({className:'',html:`<div class="route-index">${idx+1}</div>`});L.marker([p.lat,p.lng],{icon:div,interactive:false,zIndexOffset:1000}).addTo(map)});map.fitBounds(routeLayer.getBounds().pad(0.2));return{totalKm,totalMin}}
+async function drawRoadRoute(ordered){
+  // убираем старый маршрут/цифры, даже если пользователь не нажал «Очистить»
+  clearRoute();
+  let totalKm=0,totalMin=0;const features=[];
+  for(let i=1;i<ordered.length;i++){
+    const a=ordered[i-1],b=ordered[i];
+    const seg=await osrmEdge(a,b);
+    totalKm+=seg.distKm; totalMin+=seg.durMin;
+    features.push({type:'Feature',geometry:seg.geom,properties:{}});
+    await sleep(120);
+  }
+  const fc={type:'FeatureCollection',features};
+  routeLayer=L.geoJSON(fc,{style:{color:'#2f80ed',weight:5,opacity:0.9}}).addTo(map);
+  ordered.forEach((p,idx)=>{
+    const div=L.divIcon({className:'',html:`<div class="route-index">${idx+1}</div>`});
+    routeIndices.push(L.marker([p.lat,p.lng],{icon:div,interactive:false,zIndexOffset:1000}).addTo(map));
+  });
+  map.fitBounds(routeLayer.getBounds().pad(0.2));
+  return{totalKm,totalMin}
+}
 
 /* === ЗАГРУЗКА ДАННЫХ === */
 try{
@@ -215,13 +239,20 @@ try{
     return best;
   }
 
+  function ensureMarkerCommon(m,title,days,color){
+    m._miniTitle=title;
+    m._days=days||[];
+    m._color=color;           // запомним «правильный» цвет для восстановления
+    return m;
+  }
+
   for(const r of rows){
     const lat=num(r[latKey]), lng=num(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)) continue;
     const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     const op=opKey?norm(r[opKey]):'';
     const tech=techKey?norm(r[techKey]):'';
     const cnt=firstOrMaxCount(r);
-    const days=dayCols.filter(d=>norm(r[d.full])).map(d=>d.short); // <- массив шортов для фильтра
+    const days=dayCols.filter(d=>norm(r[d.full])).map(d=>d.short);
     const cntText=cnt!=null?` • Аппаратов: ${cnt}`:'';
     const daysText=days.length?` • Обслуживание: ${days.join(', ')}`:'';
 
@@ -231,8 +262,7 @@ try{
       const m=triangleMarker([lat,lng],color)
         .bindTooltip(title,{sticky:true,direction:'top',offset:[0,-10]})
         .bindPopup(`<b>${title}</b><br>Техник: ${tech}${cntText}${daysText}`);
-      m._miniTitle=title;
-      m._days=days;                               // NEW: сохраняем дни
+      ensureMarkerCommon(m,title,days,color);
       lg.addLayer(m);
       ST.techCounts.set(tech,(ST.techCounts.get(tech)||0)+1);
       if(cnt!=null) ST.techDevices.set(tech,(ST.techDevices.get(tech)||0)+cnt);
@@ -244,8 +274,7 @@ try{
       const m=L.circleMarker([lat,lng],{pane:'opPane',radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.9})
         .bindTooltip(title,{sticky:true,direction:'top',offset:[0,-10]})
         .bindPopup(`<b>${title}</b><br>Оператор: ${op}${cntText}${daysText}`);
-      m._miniTitle=title;
-      m._days=days;                               // NEW: сохраняем дни
+      ensureMarkerCommon(m,title,days,color);
       lg.addLayer(m);
       ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1);
       if(cnt!=null) ST.opDevices.set(op,(ST.opDevices.get(op)||0)+cnt);
@@ -273,6 +302,8 @@ try{
       const store=kind==='op'?opsByName:techByName;
       const layer=store.get(name);
       layer.eachLayer(m=> kind==='op'? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
+      // восстановим оригинальный цвет в сохранённом поле
+      layer.eachLayer(m=>{ m._color=hex; });
     });
   }
 
@@ -305,6 +336,7 @@ try{
     if(opOn){ for(const [n,lg] of opsByName){ const cb=document.getElementById(safeId(`op:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
     if(techOn){ for(const [n,lg] of techByName){ const cb=document.getElementById(safeId(`tech:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
     updateMiniLabels();
+    applyDayFilter(); // чтобы день продолжал действовать при глобальном переключении
   }
   toggleOps.onchange=applyVisibility;
   toggleTech.onchange=applyVisibility;
@@ -326,20 +358,22 @@ try{
   }
   tabOpsBtn.onclick=()=>setTab('ops'); tabTechBtn.onclick=()=>setTab('tech'); tabRouteBtn.onclick=()=>setTab('route');
 
-  document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; if((activeTab==='ops' && toggleOps.checked) || (activeTab==='tech' && toggleTech.checked)) store.get(n).addTo(map);} } updateMiniLabels(); };
+  document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; if((activeTab==='ops' && toggleOps.checked) || (activeTab==='tech' && toggleTech.checked)) store.get(n).addTo(map);} } updateMiniLabels(); applyDayFilter(); };
   document.getElementById('btnHideAll').onclick=()=>{ const list=activeTab==='ops'?opsList:techList; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); } } updateMiniLabels(); };
 
   /* === Маршруты + фильтр дня === */
   const routeRole=document.getElementById('routeRole'),
         routeName=document.getElementById('routeName'),
         routeDay=document.getElementById('routeDay'),
+        dayOnly=document.getElementById('dayOnly'),
         btnBuild=document.getElementById('btnBuild'),
         btnClear=document.getElementById('btnClear'),
         btnDownload=document.getElementById('btnDownload'),
         routeMeta=document.getElementById('routeMeta');
 
   function fillRouteNames(){ const list=routeRole.value==='op'?opsList:techList; routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join(''); }
-  routeRole.onchange=fillRouteNames; fillRouteNames();
+  routeRole.onchange=()=>{fillRouteNames(); clearRoute();};
+  routeName.onchange=clearRoute;
 
   function currentDayShort(){
     const mapDays=['Вс','Пн','Вт','Ср','Чт','Пт','Сб']; // JS: 0=Вс
@@ -365,6 +399,43 @@ try{
 
   function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
 
+  // визуальный фильтр по дню для ВСЕХ точек на карте
+  function styleForMatch(m,match,hardHide=false){
+    if(m.setStyle){ // круг (оператор)
+      m.setStyle({
+        fillColor: match ? m._color : '#c8c8c8',
+        fillOpacity: hardHide? (match?0.9:0) : (match?0.9:0.15),
+        color:'#222',
+        opacity: hardHide? (match?1:0) : (match?1:0.2)
+      });
+    }else{ // треугольник (техник)
+      const el=m.getElement(); if(!el) return;
+      const pg=el.querySelector('polygon');
+      if(pg) pg.setAttribute('fill', match ? m._color : '#c8c8c8');
+      el.style.opacity = hardHide? (match?1:0) : (match?1:0.35);
+      el.style.pointerEvents = (hardHide && !match) ? 'none' : '';
+    }
+    if(!match) hideMini(m);
+  }
+
+  function applyDayFilter(){
+    const daySel=routeDay.value;
+    const only=dayOnly.checked;
+    const showAll = (daySel==='ALL');
+    const target = daySel==='TODAY' ? currentDayShort() : daySel;
+
+    ST.allMarkers.forEach(m=>{
+      const days=m._days||[];
+      const match = showAll || days.includes(target);
+      styleForMatch(m,match,!showAll && only);
+    });
+    updateMiniLabels();
+    clearRoute(); // чтобы не оставались старые цифры при смене дня
+  }
+
+  routeDay.onchange=applyDayFilter;
+  dayOnly.onchange=applyDayFilter;
+
   btnBuild.onclick=async()=>{
     const kind=routeRole.value, name=routeName.value, day=routeDay.value;
     if(!name){routeMeta.textContent='Выберите имя.';return;}
@@ -380,9 +451,8 @@ try{
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
     btnDownload.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=`route_${kind}_${name}_${day}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
     btnDownload.disabled=false;
-    setTab('route');
   };
-  btnClear.onclick=()=>clearRoute();
+  btnClear.onclick=clearRoute;
 
   /* === Мини-лейблы === */
   function updateMiniLabels(){
