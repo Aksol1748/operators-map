@@ -236,7 +236,6 @@ await loadScript("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js");
 await loadScript("https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js");
 if(!window.L||!window.Papa) throw new Error("Либы не загрузились");
 
-/* === КАРТА === */
 const map=L.map("map",{attributionControl:false}).setView([55.75,37.62],9);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
 L.control.attribution({prefix:false}).addTo(map);
