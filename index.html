@@ -295,6 +295,7 @@ async function drawRoadRoute(ordered){
   });
   map.fitBounds(routeLayer.getBounds().pad(0.2));
   return {totalKm,totalMin};
+  requestAnimationFrame(()=>updateMiniLabels());
 }
 
 /* === ЗАГРУЗКА ДАННЫХ === */
