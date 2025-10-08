@@ -105,6 +105,8 @@
 (function(){const n=window.btoa?window.btoa.bind(window):null;window.btoa=function(s){try{return n?n(s):''}catch(e){return n?n(unescape(encodeURIComponent(s))):''}}})();
 
 /* === КОНФИГ === */
+// ВРЕМЕННЫЙ ПЕРЕВОД В ДЕМО, чтобы исключить зависание из-за сети/доступа к Google Sheets.
+const FORCE_DEMO = true;
 const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
 const COLOR_SYNC_URL='https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0zQ/exec';
@@ -238,19 +240,19 @@ try{
   setBadge('Загрузка «Маршрутов»…');
   let rows=[];
 try{
-  const csv=await fetchCsv(ROUTES_CSV, 12000);
-  rows = Papa.parse(csv,{header:true,skipEmptyLines:true}).data||[];
+  if(!FORCE_DEMO){
+    const csv=await fetchCsv(ROUTES_CSV, 12000);
+    rows = Papa.parse(csv,{header:true,skipEmptyLines:true}).data||[];
+  } else {
+    throw new Error('FORCE_DEMO enabled');
+  }
 } catch(err){
-  console.warn('Не удалось загрузить CSV, включаю демо', err);
-  setBadge('Нет связи с Google Sheets — включаю демо набор');
+  console.warn('Переходим в демо-режим:', err);
+  setBadge('Демо-режим: данные загружены локально');
   rows = [
     {"фио оператора":"Алиев Руслан","маршрут":"МЦ Кутузовский","lat":55.742,"lng":37.536,"понедельник":1,"количество аппаратов":2},
     {"фио оператора":"Алиев Руслан","маршрут":"БЦ Арбат","lat":55.747,"lng":37.584,"среда":1,"количество аппаратов":1},
-    {"фио оператора":"Аминов Руслан","маршрут":"МГУ корпус А","lat":55.702,"lng":37.531,"вторник":1,"количество аппаратов":5},
-    {"фио оператора":"Измайлов Джабраил","маршрут":"Коворкинг Хамовники","lat":55.728,"lng":37.573,"среда":1,"количество аппаратов":1}
-  ];
-}
-if(!rows.length) throw new Error('Пустой CSV');
+    {"фио оператора":"Аминов Руслан","маршрут":"МГУ корпус А","lat":55.702,"lng":37.531,"вторник":1,"количест
 
   const keys=Object.keys(rows[0]||{});
   const techKey=detect(keys,['фио техника','technician','tech','техник']);
