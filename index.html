@@ -2,11 +2,14 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"/>
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-<meta http-equiv="Pragma" content="no-cache"/>
-<meta http-equiv="Expires" content="0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ASPGroupMap — один лист «Маршруты»</title>
+<title>ASPGroupMap — FULL</title>
+
+<!-- Статические подключения: никакого type="module" -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
 <style>
   html,body{height:100%;margin:0}
   #map{position:absolute;inset:0;background:#f4f4f4}
@@ -39,51 +42,16 @@
   .fatal{position:absolute;left:8px;right:8px;bottom:8px;z-index:10002;background:#fff;border:1px solid #ddd;border-radius:12px;padding:10px;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12)}
   .leaflet-control-attribution a[href*="leafletjs.com"]{display:none!important}
   .route-index{background:#222;color:#fff;border-radius:10px;font:700 11px/16px system-ui;width:16px;height:16px;text-align:center;display:inline-block;transform:translate(-9px,-9px);pointer-events:none}
-  .leaflet-tooltip.mini-label{
-  pointer-events:none;
-  background:rgba(255,255,255,.9);
-  color:#111;
-  border:1px solid rgba(0,0,0,.15);
-  padding:1px 4px;
-  border-radius:6px;
-  font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-  box-shadow:0 1px 2px rgba(0,0,0,.08);
-  z-index:8000;
-}
-  /* Клики по именам и мини-редакторы */
+  .leaflet-tooltip.mini-label{pointer-events:none;background:rgba(255,255,255,.9);color:#111;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:6px;font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.08);z-index:8000}
+  /* отдельные классы (без вложенности!) */
   .as-link{color:#2f80ed;cursor:pointer;text-decoration:underline;font-weight:600}
-  .tech-picker,.op-picker{display:none;margin-top:6px}
-  .tech-picker select,.op-picker select{padding:6px 8px;border:1px solid #ddd;border-radius:8px;font:600 12px system-ui}
-  .tech-picker button,.op-picker button{margin-left:6px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
-
-  /* Панель очереди изменений */
-  .queue-panel{
-    position:fixed;left:8px;bottom:8px;z-index:10002;background:#fff;border:1px solid #ddd;
-    border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.12);padding:10px;max-width:min(520px,calc(100vw-16px))
-  }
-  .queue-panel h4{margin:0 0 8px;font:700 13px system-ui}
-  .queue-list{max-height:180px;overflow:auto;margin:6px 0;border-top:1px dashed #eee;padding-top:6px}
-  .queue-item{display:flex;gap:8px;align-items:center;font:12px system-ui;padding:4px 0}
-  .queue-item .undo{margin-left:auto;border:1px solid #ddd;background:#fafafa;border-radius:6px;padding:2px 8px;cursor:pointer}
-  .queue-actions{display:flex;gap:8px;margin-top:8px}
-  .queue-actions button{flex:1 1 auto;padding:8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
-  .queue-actions button.primary{background:#2f80ed;color:#fff;border-color:#2f80ed}
-  .queue-hint{font:12px/1.3 system-ui;color:#666;margin-top:6px}
+  .picker{display:none;margin-top:6px}
+  .picker select{padding:6px 8px;border:1px solid #ddd;border-radius:8px;font:600 12px system-ui}
+  .picker button{margin-left:6px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div class="queue-panel" id="queuePanel" style="display:none">
-  <h4>Очередь изменений (<span id="queueCount">0</span>)</h4>
-  <div class="queue-list" id="queueList"></div>
-  <div class="queue-actions">
-    <button id="queueUndo">Отменить последнюю</button>
-    <button id="queueClear">Очистить всё</button>
-    <button id="queueSave" class="primary">Сохранить в таблицу</button>
-  </div>
-  <div class="queue-hint">Изменения применяются на карте сразу, но в таблицу попадут только после «Сохранить в таблицу».</div>
-</div>
-
 <div class="status-badge" id="statusBadge">Загрузка…</div>
 <button class="filters-toggle" id="filtersToggle">Фильтры</button>
 
@@ -94,7 +62,7 @@
     <label><input type="checkbox" id="toggleTech">Техники</label>
   </div>
   <div class="tabs">
-    <button id="tabOps" class="active">Операторы</button>
+    <button id="tabOps" class="active">Операаторы</button>
     <button id="tabTech">Техники</button>
     <button id="tabRoute">Маршруты</button>
   </div>
@@ -136,785 +104,382 @@
 </aside>
 
 <noscript>Нужен JavaScript</noscript>
-<script type="module">
-  // === DIAG START ===
+<script>
+/* === ГЛОБАЛЬНАЯ ДИАГНОСТИКА === */
 window.addEventListener('error', e => {
   const m = `JS error: ${e.message}\n${e.filename}:${e.lineno}:${e.colno}`;
   console.error('[GLOBAL ERROR]', e.error || m);
-  const box = document.createElement('div');
-  box.className = 'fatal';
+  const box = document.createElement('div'); box.className='fatal';
   box.innerHTML = `<b>Критическая ошибка</b><br>${m}`;
   document.body.appendChild(box);
+  const badge=document.getElementById('statusBadge'); if(badge) badge.textContent='Ошибка';
 });
 window.addEventListener('unhandledrejection', e => {
   const m = `Promise error: ${e.reason?.message || e.reason}`;
   console.error('[UNHANDLED REJECTION]', e.reason || m);
-  const box = document.createElement('div');
-  box.className = 'fatal';
+  const box = document.createElement('div'); box.className='fatal';
   box.innerHTML = `<b>Критическая ошибка</b><br>${m}`;
   document.body.appendChild(box);
+  const badge=document.getElementById('statusBadge'); if(badge) badge.textContent='Ошибка';
 });
-// === DIAG END ===
-  
+
 /* === КОНФИГ === */
 const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
-const COLOR_SYNC_URL="https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0ZQ/exec";
-const ENABLE_SYNC=!!COLOR_SYNC_URL&&/^https?:\/\//.test(COLOR_SYNC_URL);
-const COLOR_SYNC_GET=ENABLE_SYNC?("https://r.jina.ai/http/"+COLOR_SYNC_URL.replace(/^https?:\/\//,"")):"";
-
-// ВСТАВЬ URL веб-приложения Apps Script после деплоя (см. часть 5: Apps Script)
-const WRITE_URL="https://script.google.com/macros/s/PASTE_YOUR_WEB_APP_URL/exec";
 
 /* === УТИЛИТЫ === */
-  // ===== Надёжная загрузка CSS/JS с фолбэками и таймаутом =====
-async function loadWithFallback(urls, {css=false, timeoutMs=10000, note='' } = {}){
-  let lastErr = null;
-  for (const url of urls){
-    setBadge(`Грузим ${note|| (css?'CSS':'JS')}… ${new URL(url).host}`);
-    try{
-      await new Promise((resolve, reject)=>{
-        const el = document.createElement(css?'link':'script');
-        if(css){ el.rel='stylesheet'; el.href=url; } else { el.src=url; }
-        let to = setTimeout(()=>reject(new Error('timeout '+url)), timeoutMs);
-        el.onload = ()=>{ clearTimeout(to); resolve(); };
-        el.onerror = ()=>{ clearTimeout(to); reject(new Error('onerror '+url)); };
-        document.head.appendChild(el);
-      });
-      return; // успех
-    }catch(e){
-      console.warn('[loader fail]', url, e);
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error('Не удалось загрузить: '+(urls||[]).join(', '));
-}
+const badge=document.getElementById('statusBadge');
+const setBadge=(m)=>{ if(badge) badge.textContent=m; };
+const addBuster=u=>u+(u.includes('?')?'&':'?')+'v='+(Date.now());
 
-const badge=document.getElementById("statusBadge");
-const setBadge=(msg)=>{badge.textContent=msg};
-
-async function loadStyle(href){await new Promise((resolve,reject)=>{const el=document.createElement("link");el.rel="stylesheet";el.href=href;el.onload=resolve;el.onerror=reject;document.head.appendChild(el);});}
-async function loadScript(src){await new Promise((resolve,reject)=>{const el=document.createElement("script");el.src=src;el.onload=resolve;el.onerror=reject;document.head.appendChild(el);});}
-function addBuster(url){return url+(url.includes("?")?"&":"?")+"v="+Date.now();}
 async function fetchCsv(url){
-  const resp=await fetch(addBuster(url),{cache:"no-store"});
-  if(!resp.ok) throw new Error("HTTP "+resp.status);
-  const text=await resp.text();
-  if(/^</.test(text)) throw new Error("HTML вместо CSV");
-  return text;
+  setBadge('Загрузка таблицы…');
+  const r=await fetch(addBuster(url),{cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const t=await r.text();
+  if(/^</.test(t)) throw new Error('HTML вместо CSV (включите «Опубликовать в интернете»)');
+  return t;
 }
-const toNum=(v)=>typeof v==="string"?Number(v.replace(",",".").trim()):Number(v);
-const norm=(s)=>String(s??"").trim();
+const num=v=>typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
+const norm=s=>(s??'').toString().trim();
 function detect(keys,cands){
   const lower=keys.map(k=>k.toLowerCase());
-  for(const cand of cands){const idx=lower.indexOf(cand.toLowerCase()); if(idx!==-1) return keys[idx];}
+  for(const c of cands){const i=lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i];}
   for(const k of keys){const lk=k.toLowerCase(); if(cands.some(cc=>lk.includes(cc.toLowerCase()))) return k;}
   return null;
 }
-const safeId=(str)=>"id_"+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join("");
+const safeId=str=>'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
 function djb2(str){let h=5381;for(let i=0;i<str.length;i++){h=((h<<5)+h)+str.charCodeAt(i);h|=0;}return Math.abs(h);}
 function hslToHex(h,s,l){
   h/=360; s/=100; l/=100;
-  const q = l<.5 ? l*(1+s) : l+s-l*s, p = 2*l - q;
-  const hue = (x)=>{ if(x<0)x+=1; if(x>1)x-=1;
-    if(x<1/6) return p+(q-p)*6*x;
-    if(x<1/2) return q;
-    if(x<2/3) return p+(q-p)*(2/3-x)*6;
-    return p;
-  };
-  const r=Math.round(255*hue(h+1/3)),
-        g=Math.round(255*hue(h)),
-        b=Math.round(255*hue(h-1/3));
-  return `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+  const q=l<.5?l*(1+s):l+s-l*s, p=2*l-q, hr=t=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};
+  const r=Math.round(255*hr(h+1/3)), g=Math.round(255*hr(h)), b=Math.round(255*hr(h-1/3));
+  return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
-const autoColor=(key)=>{const h=djb2(key.toLowerCase());return hslToHex(h%360,55+(h%30),45+((h/7|0)%20));};
+const autoColor=key=>{const h=djb2(key.toLowerCase());return hslToHex(h%360,55+(h%30),45+((h/7|0)%20));};
 
-/* === СИНХРОН ЦВЕТОВ === */
-const LS_KEY="operators-map:colors";
-function loadLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}");}catch{return{}}}
+/* === ЦВЕТА (localStorage) === */
+const LS_KEY='operators-map:colors';
+function loadLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch{return{}}}
 function saveLocal(obj){localStorage.setItem(LS_KEY,JSON.stringify(obj));}
 const savedLocal=loadLocal();
-async function loadRemoteColors(){
-  if(!ENABLE_SYNC) return {};
-  try{
-    const resp=await fetch(COLOR_SYNC_GET,{cache:"no-store"});
-    const txt=await resp.text();
-    const data=JSON.parse(txt);
-    return data&&data.ok?(data.colors||{}):{};
-  }catch{return {}}
-}
-async function saveRemoteColor(kind,name,color){
-  if(!ENABLE_SYNC) return;
-  try{
-    await fetch(COLOR_SYNC_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind,name,color})});
-  }catch{}
-}
 function getColor(kind,name,base){const key=`${kind}:${name}`;return savedLocal[key]||base||autoColor(key);}
-function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex;saveLocal(savedLocal);saveRemoteColor(kind,name,hex);}
+function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex;saveLocal(savedLocal);}
+/* === КАРТА === */
+if(!window.L) throw new Error('Leaflet не загрузился');
+const map=L.map('map',{attributionControl:false}).setView([55.75,37.62],9);
 
-/* === КАРТА: загрузка либ === */
-setBadge("Грузим библиотеки…");
-
-// Leaflet CSS
-await loadWithFallback([
-  "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
-  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css",
-  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-], {css:true, note:'Leaflet CSS'});
-
-// Leaflet JS
-await loadWithFallback([
-  "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js",
-  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-], {note:'Leaflet JS'});
-
-// PapaParse
-await loadWithFallback([
-  "https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",
-  "https://unpkg.com/papaparse@5.4.1/papaparse.min.js"
-], {note:'PapaParse'});
-
-if(!window.L||!window.Papa) throw new Error("Либы не загрузились");
-
-// ===== Карта и тайлы с фолбэком =====
-const map = L.map("map",{attributionControl:false}).setView([55.75,37.62],9);
-
-function addTilesWithFallback(){
-  const candidates = [
-    // базовый официальный
-    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    // французский зеркальный
-    "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
-    // carto (светлый)
-    "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+// Тайл-серверы с фолбэком
+(function addTiles(i=0){
+  const candidates=[
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
   ];
-  let idx = 0, layer = null;
-
-  const tryNext = ()=>{
-    const url = candidates[idx++];
-    if(!url){ console.warn('Нет доступных тайл-серверов'); return; }
-    layer = L.tileLayer(url, {maxZoom:19, attribution:"© OpenStreetMap contributors"});
-    layer.on('tileerror', ()=>{ // если сервер тупит — пробуем следующий
-      if(map.hasLayer(layer)) map.removeLayer(layer);
-      tryNext();
-    });
-    layer.addTo(map);
-  };
-  tryNext();
-}
-addTilesWithFallback();
+  if(i>=candidates.length){ console.warn('Нет рабочих тайлов'); return; }
+  const tl=L.tileLayer(candidates[i],{maxZoom:19,attribution:"© OpenStreetMap contributors"});
+  tl.on('tileerror',()=>{ if(map.hasLayer(tl)) map.removeLayer(tl); addTiles(i+1); });
+  tl.addTo(map);
+})();
 
 L.control.attribution({prefix:false}).addTo(map);
-
-
-const map=L.map("map",{attributionControl:false}).setView([55.75,37.62],9);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
-L.control.attribution({prefix:false}).addTo(map);
-map.createPane("techPane"); map.getPane("techPane").style.zIndex=430;
-map.createPane("opPane");   map.getPane("opPane").style.zIndex=450;
+map.createPane('techPane'); map.getPane('techPane').style.zIndex=430;
+map.createPane('opPane');   map.getPane('opPane').style.zIndex=450;
 
 /* === МИНИ-ЛЕЙБЛЫ === */
-const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
-const MINI_ZOOM = 12;
-const MAX_MINI_LABELS = IS_MOBILE ? 100 : 120;
-// безопасные алиасы кадра
-const RAF = (typeof requestAnimationFrame==='function') ? (fn)=>requestAnimationFrame(fn) : (fn)=>setTimeout(fn,0);
-const CAF = (typeof cancelAnimationFrame==='function') ? (id)=>cancelAnimationFrame(id) : (id)=>clearTimeout(id);
-let miniRafId = null;
+const IS_MOBILE=matchMedia('(pointer:coarse)').matches;
+const MINI_ZOOM=IS_MOBILE?12:13;
+const MAX_MINI_LABELS=IS_MOBILE?100:120;
+const RAF = (typeof requestAnimationFrame==='function') ? requestAnimationFrame : (fn)=>setTimeout(fn,0);
+const CAF = (typeof cancelAnimationFrame==='function') ? cancelAnimationFrame : (id)=>clearTimeout(id);
+let miniRafId=null;
+
+function ensureMini(marker,title){ if(marker._mini) return marker._mini; marker._mini=L.tooltip({permanent:true,direction:'right',offset:[10,-2],className:'mini-label'}).setContent(title); return marker._mini; }
+function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
+function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
 
 /* === СЛОИ / СТАТЫ === */
 const ST={opCounts:new Map(),opDevices:new Map(),techCounts:new Map(),techDevices:new Map(),allMarkers:[]};
 const opsByName=new Map(), techByName=new Map();
 function layerFor(mapObj,name){if(!mapObj.has(name))mapObj.set(name,L.layerGroup().addTo(map));return mapObj.get(name);}
-/* === Маркеры === */
 function triangleMarker(latlng,color){
   const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
-  const icon=L.divIcon({html:svg,className:"",iconSize:[22,22],iconAnchor:[11,18]});
-  return L.marker(latlng,{icon,pane:"techPane"});
+  const icon=L.divIcon({html:svg,className:'',iconSize:[22,22],iconAnchor:[11,18]});
+  return L.marker(latlng,{icon,pane:'techPane'});
 }
-function recolorTriangleMarker(marker,color){
-  const el=marker.getElement(); if(!el) return;
-  const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill",color);
+function recolorTriangleMarker(marker,color){const el=marker.getElement(); if(!el) return; const pg=el.querySelector('polygon'); if(pg) pg.setAttribute('fill',color);}
+
+function tagMarker(m,title,days,color){ m._miniTitle=title; m._days=days||[]; m._color=color; return m; }
+
+/* === DOM «Маршруты» === */
+const routeRole=document.getElementById('routeRole'),
+      routeName=document.getElementById('routeName'),
+      routeDay=document.getElementById('routeDay'),
+      btnBuild=document.getElementById('btnBuild'),
+      btnClear=document.getElementById('btnClear'),
+      btnDownload=document.getElementById('btnDownload'),
+      routeMeta=document.getElementById('routeMeta');
+
+/* === OSRM / маршрут === */
+const OSRM='https://router.project-osrm.org/route/v1/driving/'; const KMH_FALLBACK=30;
+function haversine(a,b){const R=6371,toRad=d=>d*Math.PI/180;const dLat=toRad(b.lat-a.lat),dLng=toRad(b.lng-a.lng);const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;return 2*R*Math.asin(Math.sqrt(s));}
+function nnRoute(points){if(points.length<=2)return points.map((p,i)=>({i,...p}));const used=new Set(),route=[];let current=0;used.add(current);route.push(points[current]);while(route.length<points.length){let best=-1,bd=1e9,last=route[route.length-1];for(let i=0;i<points.length;i++){if(used.has(i))continue;const d=haversine(last,points[i]);if(d<bd){bd=d;best=i}}used.add(best);route.push(points[best])}return route.map((p,i)=>({i,...p}));}
+function twoOpt(route){const n=route.length;if(n<4)return route;const dist=(i,j)=>haversine(route[i],route[j]);let improved=true;while(improved){improved=false;for(let i=1;i<n-2;i++){for(let k=i+1;k<n-1;k++){const d1=dist(i-1,i)+dist(k,k+1),d2=dist(i-1,k)+dist(i,k+1);if(d2+1e-9<d1){const rev=route.slice(i,k+1).reverse();route=[...route.slice(0,i),...rev,...route.slice(k+1)];improved=true}}}}return route;}
+let routeLayer=null,routeIndices=[];
+function clearRoute(){ if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;} routeIndices.forEach(el=>el.remove());routeIndices=[]; routeMeta.textContent='Маршрут не построен.'; btnDownload.disabled=true; }
+async function osrmEdge(a,b){const url=`${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('osrm http '+r.status);const j=await r.json();const route=j.routes&&j.routes[0];if(!route)throw new Error('osrm empty');return{geom:route.geometry,distKm:route.distance/1000,durMin:route.duration/60}}catch(e){const dist=haversine(a,b);return{geom:{type:'LineString',coordinates:[[a.lng,a.lat],[b.lng,b.lat]]},distKm:dist,durMin:(dist/KMH_FALLBACK)*60}}}
+async function drawRoadRoute(ordered){
+  clearRoute(); let totalKm=0,totalMin=0; const features=[];
+  for(let i=1;i<ordered.length;i++){ const a=ordered[i-1],b=ordered[i]; const seg=await osrmEdge(a,b); totalKm+=seg.distKm; totalMin+=seg.durMin; features.push({type:'Feature',geometry:seg.geom,properties:{}}); await new Promise(r=>setTimeout(r,120)); }
+  const fc={type:'FeatureCollection',features};
+  routeLayer=L.geoJSON(fc,{style:{color:'#2f80ed',weight:5,opacity:0.9}}).addTo(map);
+  ordered.forEach((p,idx)=>{const div=L.divIcon({className:'',html:`<div class="route-index">${idx+1}</div>`}); routeIndices.push(L.marker([p.lat,p.lng],{icon:div,interactive:false,zIndexOffset:1000}).addTo(map));});
+  map.fitBounds(routeLayer.getBounds().pad(0.2));
+  return{totalKm,totalMin};
 }
-
-/* === Попап-редактор техника === */
-function getAllTechNames(){ return [...ST.techCounts.keys()].sort((a,b)=>a.localeCompare(b,'ru')); }
-function techPopupHTML({title, tech, cntText='', daysText='', locId}){
-  return `<b>${title}</b><br>
-    Техник: <span class="as-link js-change-tech" data-loc="${locId}">${tech||'—'}</span>${cntText}${daysText}
-    <div class="tech-picker" data-loc="${locId}">
-      <select class="tech-select">
-        ${getAllTechNames().map(n=>`<option value="${n}" ${n===tech?'selected':''}>${n}</option>`).join('')}
-      </select>
-      <button class="tech-apply">Применить</button>
-      <button class="tech-cancel">Отмена</button>
-    </div>`;
-}
-function updateTechRowCount(name){
-  if(!name) return;
-  const cb = document.getElementById(safeId('tech:'+name));
-  if(!cb) return;
-  const li = cb.closest('li'); if(!li) return;
-  const span = li.querySelector('.count'); if(!span) return;
-  const tail = (span.textContent.match(/\s*\(.+\)$/) || [''])[0];
-  span.textContent = (ST.techCounts.get(name)||0) + tail;
-}
-function reassignTech(marker, newTech){
-  const oldTech = marker._techName || '';
-  if(!newTech || newTech===oldTech) return;
-
-  const oldLg = techByName.get(oldTech);
-  if(oldLg) oldLg.removeLayer(marker);
-
-  let newLg = techByName.get(newTech);
-  if(!newLg){ newLg = L.layerGroup(); techByName.set(newTech, newLg); }
-  newLg.addLayer(marker);
-
-  ST.techCounts.set(oldTech, Math.max(0,(ST.techCounts.get(oldTech)||1)-1));
-  ST.techCounts.set(newTech, (ST.techCounts.get(newTech)||0)+1);
-  updateTechRowCount(oldTech); updateTechRowCount(newTech);
-
-  const hex = getColor('tech', newTech, autoColor('tech:'+newTech));
-  recolorTriangleMarker(marker, hex);
-  marker._color = hex;
-  marker._techName = newTech;
-
-  const newCB = document.getElementById(safeId('tech:'+newTech));
-  if(!(document.getElementById('toggleTech').checked && newCB && newCB.checked)){
-    map.removeLayer(newLg);
-  }
-  applyDayFilter?.(); updateMiniLabels?.();
-}
-
-/* === Попап-редактор оператора === */
-function getAllOpNames(){ return [...ST.opCounts.keys()].sort((a,b)=>a.localeCompare(b,'ru')); }
-function opPopupHTML({title, op, cntText='', daysText='', locId}){
-  return `<b>${title}</b><br>
-    Оператор: <span class="as-link js-change-op" data-loc="${locId}">${op||'—'}</span>${cntText}${daysText}
-    <div class="op-picker" data-loc="${locId}">
-      <select class="op-select">
-        ${getAllOpNames().map(n=>`<option value="${n}" ${n===op?'selected':''}>${n}</option>`).join('')}
-      </select>
-      <button class="op-apply">Применить</button>
-      <button class="op-cancel">Отмена</button>
-    </div>`;
-}
-function updateOpRowCount(name){
-  if(!name) return;
-  const cb = document.getElementById(safeId('op:'+name));
-  if(!cb) return;
-  const li = cb.closest('li'); if(!li) return;
-  const span = li.querySelector('.count'); if(!span) return;
-  const tail = (span.textContent.match(/\s*\(.+\)$/) || [''])[0];
-  span.textContent = (ST.opCounts.get(name)||0) + tail;
-}
-function reassignOp(marker, newOp){
-  const oldOp = marker._opName || '';
-  if(!newOp || newOp===oldOp) return;
-
-  const oldLg = opsByName.get(oldOp);
-  if(oldLg) oldLg.removeLayer(marker);
-
-  let newLg = opsByName.get(newOp);
-  if(!newLg){ newLg = L.layerGroup(); opsByName.set(newOp, newLg); }
-  newLg.addLayer(marker);
-
-  ST.opCounts.set(oldOp, Math.max(0,(ST.opCounts.get(oldOp)||1)-1));
-  ST.opCounts.set(newOp, (ST.opCounts.get(newOp)||0)+1);
-  updateOpRowCount(oldOp); updateOpRowCount(newOp);
-
-  const hex = getColor('op', newOp, autoColor(newOp));
-  marker.setStyle?.({fillColor:hex});
-  marker._color = hex;
-  marker._opName = newOp;
-
-  const newCB = document.getElementById(safeId('op:'+newOp));
-  if(!(document.getElementById('toggleOps').checked && newCB && newCB.checked)){
-    map.removeLayer(newLg);
-  }
-  applyDayFilter?.(); updateMiniLabels?.();
-}
-
-/* === Мини-лейблы === */
-function ensureMini(marker,title){ if(marker._mini) return marker._mini; marker._mini=L.tooltip({permanent:true,direction:"right",offset:[10,-2],className:"mini-label"}).setContent(title); return marker._mini; }
-function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
-function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
-
-/* === DOM: «Маршруты» и панель очереди === */
-const routeRole=document.getElementById("routeRole"),
-      routeName=document.getElementById("routeName"),
-      routeDay=document.getElementById("routeDay"),
-      btnBuild=document.getElementById("btnBuild"),
-      btnClear=document.getElementById("btnClear"),
-      btnDownload=document.getElementById("btnDownload"),
-      routeMeta=document.getElementById("routeMeta");
-
-const queuePanel = document.getElementById('queuePanel');
-const queueCount = document.getElementById('queueCount');
-const queueList  = document.getElementById('queueList');
-const queueUndo  = document.getElementById('queueUndo');
-const queueClear = document.getElementById('queueClear');
-const queueSave  = document.getElementById('queueSave');
-
-/* === Очередь изменений (откат/сохранение) === */
-const ChangeQueue = {
-  items: [], // {type:'tech'|'op', locId, from, to, name, lat, lng}
-  add(it){
-    const i = this.items.findIndex(x=>x.locId===it.locId && x.type===it.type);
-    if(i>-1) this.items.splice(i,1);
-    this.items.push(it);
-    this.render();
-  },
-  pop(){
-    const it = this.items.pop();
-    if(it) this.revert(it);
-    this.render();
-  },
-  clearAll(){
-    for(let i=this.items.length-1;i>=0;i--) this.revert(this.items[i]);
-    this.items = [];
-    this.render();
-  },
-  revert(it){
-    const marker = ST.allMarkers.find(m=>m._locId===it.locId);
-    if(!marker) return;
-    if(it.type==='tech') reassignTech(marker, it.from);
-    else reassignOp(marker, it.from);
-  },
-  render(){
-    queueCount.textContent = this.items.length;
-    queuePanel.style.display = this.items.length ? '' : 'none';
-    queueList.innerHTML = this.items.map(it=>{
-      const arrow = it.type==='tech' ? 'техник' : 'оператор';
-      return `<div class="queue-item">
-        <span>${it.name}</span>
-        <span>• ${arrow}: <b>${it.from||'—'}</b> → <b>${it.to}</b></span>
-        <button class="undo" data-id="${it.locId}" data-type="${it.type}">⟲</button>
-      </div>`;
-    }).join('');
-    queueList.querySelectorAll('.undo').forEach(btn=>{
-      btn.onclick = ()=>{
-        const id = btn.getAttribute('data-id');
-        const tp = btn.getAttribute('data-type');
-        const idx = this.items.findIndex(x=>x.locId===id && x.type===tp);
-        if(idx>-1){ this.revert(this.items[idx]); this.items.splice(idx,1); this.render(); }
-      };
-    });
-  }
-};
-// кнопки панели
-queueUndo.onclick  = ()=>ChangeQueue.pop();
-queueClear.onclick = ()=>ChangeQueue.clearAll();
-queueSave.onclick  = async ()=>{
-  if(!WRITE_URL || WRITE_URL.includes('PASTE_YOUR_WEB_APP_URL')){
-    alert('WRITE_URL не настроен. Разверни Apps Script Web App и вставь его URL в код.');
-    return;
-  }
-  if(!ChangeQueue.items.length) return;
-  setBadge('Сохраняем изменения…');
-
-  const payload = {
-    action: 'batchAssign',
-    items: ChangeQueue.items.map(it=>({
-      type: it.type, name: it.name, lat: it.lat, lng: it.lng, to: it.to
-    }))
-  };
-
-  try{
-    const r = await fetch(WRITE_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    const data = await r.json().catch(()=>null);
-    if(!r.ok || !data || !data.ok) throw new Error((data&&data.error)||('HTTP '+r.status));
-    setBadge('Изменения записаны в таблицу');
-    ChangeQueue.items = []; ChangeQueue.render();
-  }catch(e){
-    console.error(e);
-    alert('Не удалось записать в таблицу: '+e.message);
-    setBadge('Ошибка записи');
-  }finally{
-    setTimeout(()=>setBadge(`${[...ST.opCounts.keys()].length} операторов • ${[...ST.techCounts.keys()].length} техников • ${ST.allMarkers.length} точек`),1200);
-  }
-};
-
-/* === Обработчик попапов (и для техников, и для операторов) === */
-map.on('popupopen', (e)=>{
-  const root = e.popup.getElement();
-  if(!root) return;
-
-  const locIdEl = root.querySelector('[data-loc]');
-  const locId = locIdEl?.getAttribute('data-loc');
-  if(!locId) return;
-
-  const marker = ST.allMarkers.find(m=>m._locId===locId);
-  if(!marker) return;
-
-  // Техник
-  const changeTech = root.querySelector('.js-change-tech');
-  const techPicker = root.querySelector('.tech-picker');
-  if(changeTech && techPicker){
-    changeTech.addEventListener('click', ()=>{ techPicker.style.display='block'; });
-    techPicker.querySelector('.tech-cancel').addEventListener('click', ()=>{ techPicker.style.display='none'; });
-    techPicker.querySelector('.tech-apply').addEventListener('click', ()=>{
-      const sel = techPicker.querySelector('.tech-select');
-      const newTech = sel.value;
-      const oldTech = marker._techName || '';
-      if(newTech && newTech!==oldTech){
-        reassignTech(marker, newTech);
-        const ll = marker.getLatLng();
-        ChangeQueue.add({type:'tech', locId, from:oldTech, to:newTech, name: marker._miniTitle||'', lat: ll.lat, lng: ll.lng});
-        e.popup.setContent( techPopupHTML({title: marker._miniTitle||'', tech: marker._techName||'', cntText: marker._cntText||'', daysText: marker._daysText||'', locId}) );
-        setTimeout(()=>map.fire('popupopen', {popup:e.popup}), 0);
-      }
-    });
-  }
-
-  // Оператор
-  const changeOp = root.querySelector('.js-change-op');
-  const opPicker = root.querySelector('.op-picker');
-  if(changeOp && opPicker){
-    changeOp.addEventListener('click', ()=>{ opPicker.style.display='block'; });
-    opPicker.querySelector('.op-cancel').addEventListener('click', ()=>{ opPicker.style.display='none'; });
-    opPicker.querySelector('.op-apply').addEventListener('click', ()=>{
-      const sel = opPicker.querySelector('.op-select');
-      const newOp = sel.value;
-      const oldOp = marker._opName || '';
-      if(newOp && newOp!==oldOp){
-        reassignOp(marker, newOp);
-        const ll = marker.getLatLng();
-        ChangeQueue.add({type:'op', locId, from:oldOp, to:newOp, name: marker._miniTitle||'', lat: ll.lat, lng: ll.lng});
-        e.popup.setContent( opPopupHTML({title: marker._miniTitle||'', op: marker._opName||'', cntText: marker._cntText||'', daysText: marker._daysText||'', locId}) );
-        setTimeout(()=>map.fire('popupopen', {popup:e.popup}), 0);
-      }
-    });
-  }
-});
-<!-- === ЧАСТЬ 4/5 === -->
 /* === ЗАГРУЗКА ДАННЫХ === */
-try{
-  Object.assign(savedLocal,await loadRemoteColors()); saveLocal(savedLocal);
+(async function main(){
+  try{
+    const csvText=await fetchCsv(ROUTES_CSV);
+    const rows=Papa.parse(csvText,{header:true,skipEmptyLines:true}).data||[];
+    if(!rows.length) throw new Error('Пустой CSV');
 
-  setBadge("Загрузка «Маршрутов»…");
-  const csvText=await fetchCsv(ROUTES_CSV);
-  const rows=Papa.parse(csvText,{header:true,skipEmptyLines:true}).data||[];
-  if(!rows.length) throw new Error("Пустой CSV");
+    const keys=Object.keys(rows[0]||{});
+    const techKey=detect(keys,['фио техника','technician','tech','техник']);
+    const opKey=detect(keys,['фио оператора','оператор','fio','name','operator']);
+    const nameKey=detect(keys,['маршрут всего локации','маршрут','локация','название','адрес','name']);
+    const latKey=detect(keys,['lat','latitude','широта','y']);
+    const lngKey=detect(keys,['lng','lon','longitude','долгота','x']);
+    const dayCols=[
+      {full:detect(keys,['понедельник','monday']),short:'Пн'},
+      {full:detect(keys,['вторник','tuesday']),short:'Вт'},
+      {full:detect(keys,['среда','wednesday']),short:'Ср'},
+      {full:detect(keys,['четверг','thursday']),short:'Чт'},
+      {full:detect(keys,['пятница','friday']),short:'Пт'},
+      {full:detect(keys,['суббота','saturday']),short:'Сб'},
+      {full:detect(keys,['воскресенье','sunday']),short:'Вс'},
+    ].filter(d=>d.full);
+    const countCols=keys.filter(k=>/колич|аппарат/i.test(k));
+    if(!latKey||!lngKey) throw new Error('Не найдены координаты (lat/lng)');
+    if(!nameKey) throw new Error('Не найдено название локации');
 
-  // распознаём колонки
-  const keys=Object.keys(rows[0]||{});
-  const techKey=detect(keys,["фио техника","technician","tech","техник"]);
-  const opKey=detect(keys,["фио оператора","оператор","fio","name","operator"]);
-  const nameKey=detect(keys,["маршрут всего локации","маршрут","локация","название","адрес","name"]);
-  const latKey=detect(keys,["lat","latitude","широта","y"]);
-  const lngKey=detect(keys,["lng","lon","longitude","долгота","x"]);
-  const dayCols=[
-    {full:detect(keys,["понедельник","monday"]),short:"Пн"},
-    {full:detect(keys,["вторник","tuesday"]),short:"Вт"},
-    {full:detect(keys,["среда","wednesday"]),short:"Ср"},
-    {full:detect(keys,["четверг","thursday"]),short:"Чт"},
-    {full:detect(keys,["пятница","friday"]),short:"Пт"},
-    {full:detect(keys,["суббота","saturday"]),short:"Сб"},
-    {full:detect(keys,["воскресенье","sunday"]),short:"Вс"},
-  ].filter(d=>d.full);
-  const countCols=keys.filter(k=>/колич|аппарат/i.test(k));
-
-  if(!latKey||!lngKey) throw new Error("Не найдены координаты (lat/lng)");
-  if(!nameKey) throw new Error("Не найдено название локации");
-
-  function firstOrMaxCount(row){
-    let best=null;
-    for(const k of countCols){
-      const v=Number(String(row[k]??"").replace(",",".")); if(!isFinite(v)) continue;
-      best = best==null ? v : Math.max(best,v);
-    }
-    return best;
-  }
-
-  // создаём маркеры
-  for(const r of rows){
-    const lat=toNum(r[latKey]), lng=toNum(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)) continue;
-    const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-    const op = opKey  ? norm(r[opKey])   : "";
-    const tech= techKey? norm(r[techKey]) : "";
-    const cnt=firstOrMaxCount(r);
-    const days=dayCols.filter(d=>norm(r[d.full])).map(d=>d.short);
-    const cntText=cnt!=null?` • Аппаратов: ${cnt}`:"";
-    const daysText=days.length?` • Обслуживание: ${days.join(", ")}`:"";
-
-    if(tech){
-      const color=getColor("tech",tech,autoColor("tech:"+tech));
-      const lg=layerFor(techByName,tech);
-      const m=triangleMarker([lat,lng],color)
-        .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]});
-      // метаданные для переназначений
-      m._locId = safeId(`pt:${title}|${lat}|${lng}`);
-      m._techName = tech;
-      m._cntText = cntText;
-      m._daysText = daysText;
-      m._miniTitle=title; m._days=days; m._color=color;
-
-      // попап с редактированием ТЕХНИКА (функция techPopupHTML объявлена в первых частях)
-      m.bindPopup( techPopupHTML({title, tech, cntText, daysText, locId: m._locId}) );
-
-      lg.addLayer(m);
-      ST.techCounts.set(tech,(ST.techCounts.get(tech)||0)+1);
-      if(cnt!=null) ST.techDevices.set(tech,(ST.techDevices.get(tech)||0)+cnt);
-      ST.allMarkers.push(m);
+    function firstOrMaxCount(row){
+      let best=null; for(const k of countCols){ const v=Number(String(row[k]??'').replace(',','.')); if(!isFinite(v)) continue; best = best==null?v:Math.max(best,v); } return best;
     }
 
-    if(op){
-      const color=getColor("op",op,autoColor(op));
-      const lg=layerFor(opsByName,op);
-      const m=L.circleMarker([lat,lng],{pane:"opPane",radius:7,weight:2,color:"#222",fillColor:color,fillOpacity:.9})
-        .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]});
-      // метаданные для переназначений
-      m._locId = safeId(`pt:${title}|${lat}|${lng}`);
-      m._opName = op;
-      m._cntText = cntText;
-      m._daysText = daysText;
-      m._miniTitle=title; m._days=days; m._color=color;
+    for(const r of rows){
+      const lat=num(r[latKey]), lng=num(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)) continue;
+      const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+      const op=opKey?norm(r[opKey]):''; const tech=techKey?norm(r[techKey]):'';
+      const cnt=firstOrMaxCount(r);
+      const days=dayCols.filter(d=>norm(r[d.full])).map(d=>d.short);
+      const cntText=cnt!=null?` • Аппаратов: ${cnt}`:''; const daysText=days.length?` • Обслуживание: ${days.join(', ')}`:'';
 
-      // попап с редактированием ОПЕРАТОРА (функция opPopupHTML объявлена в первых частях)
-      m.bindPopup( opPopupHTML({title, op, cntText, daysText, locId: m._locId}) );
-
-      lg.addLayer(m);
-      ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1);
-      if(cnt!=null) ST.opDevices.set(op,(ST.opDevices.get(op)||0)+cnt);
-      ST.allMarkers.push(m);
+      if(tech){
+        const color=getColor('tech',tech,autoColor('tech:'+tech));
+        const lg=layerFor(techByName,tech);
+        const m=triangleMarker([lat,lng],color)
+          .bindTooltip(title,{sticky:true,direction:'top',offset:[0,-10]})
+          .bindPopup(`<b>${title}</b><br>Техник: ${tech}${cntText}${daysText}`);
+        tagMarker(m,title,days,color);
+        lg.addLayer(m);
+        ST.techCounts.set(tech,(ST.techCounts.get(tech)||0)+1);
+        if(cnt!=null) ST.techDevices.set(tech,(ST.techDevices.get(tech)||0)+cnt);
+        ST.allMarkers.push(m);
+      }
+      if(op){
+        const color=getColor('op',op,autoColor(op));
+        const lg=layerFor(opsByName,op);
+        const m=L.circleMarker([lat,lng],{pane:'opPane',radius:7,weight:2,color:'#222',fillColor:color,fillOpacity:.9})
+          .bindTooltip(title,{sticky:true,direction:'top',offset:[0,-10]})
+          .bindPopup(`<b>${title}</b><br>Оператор: ${op}${cntText}${daysText}`);
+        tagMarker(m,title,days,color);
+        lg.addLayer(m);
+        ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1);
+        if(cnt!=null) ST.opDevices.set(op,(ST.opDevices.get(op)||0)+cnt);
+        ST.allMarkers.push(m);
+      }
     }
-  }
 
-  // авто-фит карты и первичные лейблы
-  if(ST.allMarkers.length){
-    const g=L.featureGroup(ST.allMarkers);
-    map.fitBounds(g.getBounds().pad(0.2));
-    (typeof updateMiniLabels==='function') && updateMiniLabels();
-  }
+    if(ST.allMarkers.length){ const g=L.featureGroup(ST.allMarkers); map.fitBounds(g.getBounds().pad(0.2)); }
+    const opsList=[...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
+    const techList=[...ST.techCounts.keys()].sort((a,b)=>(ST.techCounts.get(b)||0)-(ST.techCounts.get(a)||0));
+    document.getElementById('totals').textContent=`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`;
+    setBadge(`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`);
 
-  // счётчики в шапке
-  const opsList=[...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
-  const techList=[...ST.techCounts.keys()].sort((a,b)=>(ST.techCounts.get(b)||0)-(ST.techCounts.get(a)||0));
-  document.getElementById("totals").textContent=`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`;
-  setBadge(`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`);
+    const opsUL=document.getElementById('opsList'), techUL=document.getElementById('techList');
 
-  // списки слева
-  const opsUL=document.getElementById("opsList"), techUL=document.getElementById("techList");
-
-  function mountColorSwatch(div,kind,name,initColor){
-    div.style.background=initColor;
-    const input=document.createElement("input"); input.type="color";
-    input.value=/^#[0-9A-Fa-f]{6}$/.test(initColor)?initColor:"#888888";
-    div.appendChild(input);
-    div.addEventListener("click",()=>input.click());
-    input.addEventListener("input",()=>{
-      const hex=input.value; setColor(kind,name,hex); div.style.background=hex;
-      const store=kind==="op"?opsByName:techByName;
-      const layer=store.get(name);
-      layer.eachLayer(m=> kind==="op" ? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
-      layer.eachLayer(m=>{ m._color=hex; });
-      (typeof updateMiniLabels==='function') && updateMiniLabels();
-    });
-  }
-
-  function addRow(targetUl,kind,name,count,devices){
-    const id=safeId(`${kind}:${name}`); const sw=kind==="tech"?"swatch tri":"swatch";
-    const li=document.createElement("li");
-    const devicesText=devices?` (ТА${devices})`:"";
-    li.innerHTML=`<input type="checkbox" id="${id}" checked>
-      <span class="${sw}"></span>
-      <label for="${id}">${name}</label>
-      <span class="count">${count}${devicesText}</span>`;
-    const cb=li.querySelector("input");
-    mountColorSwatch(li.querySelector(".swatch"),kind,name,getColor(kind,name,autoColor(kind==="op"?name:"tech:"+name)));
-    const layer=(kind==="op"?opsByName:techByName).get(name);
-    cb.onchange=()=>{ if(cb.checked){ const on=(kind==="op"?toggleOps.checked:toggleTech.checked); if(on) layer.addTo(map);} else { map.removeLayer(layer);} (typeof updateMiniLabels==='function') && updateMiniLabels(); (typeof clearRoute==='function') && clearRoute(); };
-    targetUl.appendChild(li);
-  }
-
-  for(const op of opsList){addRow(opsUL,"op",op,ST.opCounts.get(op)||0,ST.opDevices.get(op)||0);}
-  for(const t of techList){addRow(techUL,"tech",t,ST.techCounts.get(t)||0,ST.techDevices.get(t)||0);}
-
-  // включатели групп
-  const toggleOps=document.getElementById("toggleOps");
-  const toggleTech=document.getElementById("toggleTech");
-
-  function applyVisibility(){
-    const opOn=toggleOps.checked, techOn=toggleTech.checked;
-    for(const [,lg] of opsByName) map.removeLayer(lg);
-    for(const [,lg] of techByName) map.removeLayer(lg);
-    if(opOn){ for(const [n,lg] of opsByName){ const cb=document.getElementById(safeId(`op:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
-    if(techOn){ for(const [n,lg] of techByName){ const cb=document.getElementById(safeId(`tech:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
-    (typeof updateMiniLabels==='function') && updateMiniLabels();
-    (typeof applyDayFilter==='function') && applyDayFilter();
-  }
-  toggleOps.onchange=applyVisibility;
-  toggleTech.onchange=applyVisibility;
-
-  // вкладки и массовые кнопки
-  let activeTab="ops";
-  const tabOpsBtn=document.getElementById("tabOps"), tabTechBtn=document.getElementById("tabTech"), tabRouteBtn=document.getElementById("tabRoute");
-  const routePanel=document.getElementById("routePanel");
-  function setTab(t){
-    activeTab=t;
-    tabOpsBtn.classList.toggle("active",t==="ops");
-    tabTechBtn.classList.toggle("active",t==="tech");
-    tabRouteBtn.classList.toggle("active",t==="route");
-    document.getElementById("opsList").style.display=t==="ops"?"":"none";
-    document.getElementById("techList").style.display=t==="tech"?"":"none";
-    routePanel.style.display=t==="route"?"":"none";
-    (typeof updateMiniLabels==='function') && updateMiniLabels();
-    (typeof clearRoute==='function') && clearRoute();
-  }
-  tabOpsBtn.onclick=()=>setTab("ops");
-  tabTechBtn.onclick=()=>setTab("tech");
-  tabRouteBtn.onclick=()=>setTab("route");
-
-  document.getElementById("btnShowAll").onclick=()=>{
-    const list=activeTab==="ops"?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
-    const store=activeTab==="ops"?opsByName:techByName;
-    const pref=activeTab==="ops"?"op:":"tech:";
-    for(const n of list){
-      const id=safeId(pref+n), cb=document.getElementById(id);
-      if(cb && !cb.checked){ cb.checked=true; const lg=store.get(n); lg.addTo(map); }
-    }
-    (typeof updateMiniLabels==='function') && updateMiniLabels();
-    (typeof applyDayFilter==='function') && applyDayFilter();
-  };
-  document.getElementById("btnHideAll").onclick=()=>{
-    const list=activeTab==="ops"?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
-    const store=activeTab==="ops"?opsByName:techByName;
-    const pref=activeTab==="ops"?"op:":"tech:";
-    for(const n of list){
-      const id=safeId(pref+n), cb=document.getElementById(id);
-      if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); }
-    }
-    (typeof updateMiniLabels==='function') && updateMiniLabels();
-    (typeof clearRoute==='function') && clearRoute();
-  };
-/* === ФИЛЬТР ДНЕЙ И МИНИ-ЛЕЙБЛЫ === */
-function resetMarkerStyle(m){
-  if(m.setStyle){
-    m.setStyle({ fillColor:m._color, fillOpacity:0.9, color:"#222", opacity:1 });
-  }else{
-    const el=m.getElement(); if(!el) return;
-    const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill",m._color);
-    el.style.opacity=1; el.style.pointerEvents="";
-  }
-}
-
-function applyDayFilter(){
-  const daySel=routeDay.value;
-  const showAll=(daySel==="ALL");
-
-  if(showAll){
-    ST.allMarkers.forEach(resetMarkerStyle);
-    (typeof updateMiniLabels==='function') && updateMiniLabels();
-    (typeof clearRoute==='function') && clearRoute();
-    return;
-  }
-
-  const todayShort=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"][new Date().getDay()];
-  const target = (daySel==="TODAY") ? todayShort : daySel;
-
-  const styleForMatch=(m,match)=>{
-    if(m.setStyle){
-      m.setStyle({
-        fillColor: match ? m._color : "#c8c8c8",
-        fillOpacity: match ? 0.9 : 0.15,
-        color:"#222", opacity: match ? 1 : 0.2
+    function mountColorSwatch(div,kind,name,initColor){
+      div.style.background=initColor;
+      const input=document.createElement('input'); input.type='color';
+      input.value=/^#[0-9A-Fa-f]{6}$/.test(initColor)?initColor:'#888888';
+      div.appendChild(input);
+      div.addEventListener('click',()=>input.click());
+      input.addEventListener('input',()=>{
+        const hex=input.value; setColor(kind,name,hex); div.style.background=hex;
+        const store=kind==='op'?opsByName:techByName; const layer=store.get(name);
+        layer.eachLayer(m=> kind==='op'? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
+        layer.eachLayer(m=>{ m._color=hex; });
+        updateMiniLabels();
       });
-    }else{
-      const el=m.getElement(); if(!el) return;
-      const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill", match ? m._color : "#c8c8c8");
-      el.style.opacity = match ? 1 : 0.35;
-      el.style.pointerEvents = "";
     }
-    if(!match) { if(m._mini) m._mini.remove(); }
-  };
 
-  ST.allMarkers.forEach(m=>{
-    const days=m._days||[];
-    const match=days.includes(target);
-    styleForMatch(m,match);
-  });
-  (typeof updateMiniLabels==='function') && updateMiniLabels();
-  (typeof clearRoute==='function') && clearRoute();
-}
+    function addRow(targetUl,kind,name,count,devices){
+      const id=safeId(`${kind}:${name}`); const sw=kind==='tech'?'swatch tri':'swatch';
+      const li=document.createElement('li');
+      const devicesText=devices?` (ТА${devices})`:'';
+      li.innerHTML=`<input type="checkbox" id="${id}" checked>
+        <span class="${sw}"></span>
+        <label for="${id}">${name}</label>
+        <span class="count">${count}${devicesText}</span>`;
+      const cb=li.querySelector('input');
+      mountColorSwatch(li.querySelector('.swatch'),kind,name,getColor(kind,name,autoColor(kind==='op'?name:'tech:'+name)));
+      const layer=(kind==='op'?opsByName:techByName).get(name);
+      cb.onchange=()=>{ if(cb.checked){ const on=(kind==='op'?toggleOps.checked:toggleTech.checked); if(on) layer.addTo(map);} else { map.removeLayer(layer);} updateMiniLabels(); clearRoute(); };
+      targetUl.appendChild(li);
+    }
 
-/* === МАРШРУТЫ (OSRM уже объявлен выше) === */
-function currentDayShort(){ return ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"][new Date().getDay()]; }
+    for(const op of opsList){addRow(opsUL,'op',op,ST.opCounts.get(op)||0,ST.opDevices.get(op)||0);}
+    for(const t of techList){addRow(techUL,'tech',t,ST.techCounts.get(t)||0,ST.techDevices.get(t)||0);}
 
-function collectPoints(kind,name,dayFilter){
-  const store=kind==="op"?opsByName:techByName;
-  const layer=store.get(name); if(!layer) return [];
-  const groupOn=kind==="op"?toggleOps.checked:toggleTech.checked; if(!groupOn) return [];
-  const targetDay = dayFilter==="TODAY" ? currentDayShort() : dayFilter;
-  const isAll = (dayFilter==="ALL");
-  const pts=[];
-  layer.eachLayer(m=>{
-    const ll=m.getLatLng();
-    const nm=(m.getTooltip()?.getContent())||"";
-    const days=m._days||[];
-    const allowed = isAll || (days.includes(targetDay));
-    if(allowed) pts.push({lat:ll.lat,lng:ll.lng,title:nm});
-  });
-  return pts;
-}
+    /* === ПЕРЕКЛЮЧАТЕЛИ / МИНИ === */
+    const toggleOps=document.getElementById('toggleOps');
+    const toggleTech=document.getElementById('toggleTech');
 
-function toCsv(route){
-  const rows=[["order","name","lat","lng","cum_km"]];
-  let sum=0;
-  for(let i=0;i<route.length;i++){
-    if(i>0) sum+=haversine(route[i-1],route[i]);
-    rows.push([i+1,route[i].title||"",route[i].lat,route[i].lng,sum.toFixed(3)]);
+    function updateMiniLabels(){
+      if(miniRafId!==null) CAF(miniRafId);
+      miniRafId = RAF(()=>{
+        const showZoom=map.getZoom()>=MINI_ZOOM;
+        const bounds=map.getBounds(); const visible=[];
+        const opOn=toggleOps.checked, techOn=toggleTech.checked;
+
+        for(const [n,lg] of opsByName){
+          const cb=document.getElementById(safeId(`op:${n}`)); const on=opOn && cb?.checked;
+          lg.eachLayer(m=>{ if(on && bounds.contains(m.getLatLng())) visible.push(m); else hideMini(m); });
+        }
+        for(const [n,lg] of techByName){
+          const cb=document.getElementById(safeId(`tech:${n}`)); const on=techOn && cb?.checked;
+          lg.eachLayer(m=>{ if(on && bounds.contains(m.getLatLng())) visible.push(m); else hideMini(m); });
+        }
+        if(!showZoom){ visible.forEach(hideMini); return; }
+        const limit=Math.min(MAX_MINI_LABELS,visible.length);
+        for(let i=0;i<visible.length;i++){ const m=visible[i]; if(i<limit){ if(!m._mini) ensureMini(m,m._miniTitle||''); showMini(m); } else hideMini(m); }
+      });
+    }
+
+    function resetMarkerStyle(m){
+      if(m.setStyle){ m.setStyle({ fillColor:m._color, fillOpacity:0.9, color:'#222', opacity:1 }); }
+      else { const el=m.getElement(); if(!el) return; const pg=el.querySelector('polygon'); if(pg) pg.setAttribute('fill',m._color); el.style.opacity=1; el.style.pointerEvents=''; }
+    }
+
+    function applyDayFilter(){
+      const daySel=routeDay.value; const showAll=(daySel==='ALL');
+      if(showAll){ ST.allMarkers.forEach(resetMarkerStyle); updateMiniLabels(); clearRoute(); return; }
+      const todayShort=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date().getDay()];
+      const target=(daySel==='TODAY')?todayShort:daySel;
+
+      const styleForMatch=(m,match)=>{
+        if(m.setStyle){ m.setStyle({ fillColor: match ? m._color : '#c8c8c8', fillOpacity: match?0.9:0.15, color:'#222', opacity: match?1:0.2 }); }
+        else { const el=m.getElement(); if(!el) return; const pg=el.querySelector('polygon'); if(pg) pg.setAttribute('fill', match?m._color:'#c8c8c8'); el.style.opacity=match?1:0.35; el.style.pointerEvents=''; }
+        if(!match) hideMini(m);
+      };
+
+      ST.allMarkers.forEach(m=>{ const days=m._days||[]; const match=days.includes(target); styleForMatch(m,match); });
+      updateMiniLabels(); clearRoute();
+    }
+
+    function applyVisibility(){
+      const opOn=toggleOps.checked, techOn=toggleTech.checked;
+      for(const [,lg] of opsByName) map.removeLayer(lg);
+      for(const [,lg] of techByName) map.removeLayer(lg);
+      if(opOn){ for(const [n,lg] of opsByName){ const cb=document.getElementById(safeId(`op:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
+      if(techOn){ for(const [n,lg] of techByName){ const cb=document.getElementById(safeId(`tech:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
+      updateMiniLabels(); applyDayFilter();
+    }
+    toggleOps.onchange=applyVisibility;
+    toggleTech.onchange=applyVisibility;
+    applyVisibility();
+
+    /* === ВКЛАДКИ / МАСС-КНОПКИ === */
+    let activeTab='ops';
+    const tabOpsBtn=document.getElementById('tabOps'), tabTechBtn=document.getElementById('tabTech'), tabRouteBtn=document.getElementById('tabRoute');
+    const routePanel=document.getElementById('routePanel');
+    function setTab(t){
+      activeTab=t;
+      tabOpsBtn.classList.toggle('active',t==='ops');
+      tabTechBtn.classList.toggle('active',t==='tech');
+      tabRouteBtn.classList.toggle('active',t==='route');
+      document.getElementById('opsList').style.display=t==='ops'?'':'none';
+      document.getElementById('techList').style.display=t==='tech'?'':'none';
+      routePanel.style.display=t==='route'?'':'none';
+      updateMiniLabels(); clearRoute();
+    }
+    tabOpsBtn.onclick=()=>setTab('ops');
+    tabTechBtn.onclick=()=>setTab('tech');
+    tabRouteBtn.onclick=()=>setTab('route');
+
+    document.getElementById('btnShowAll').onclick=()=>{
+      const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+      const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:';
+      for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; const lg=store.get(n); lg.addTo(map);} }
+      updateMiniLabels(); applyDayFilter();
+    };
+    document.getElementById('btnHideAll').onclick=()=>{
+      const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+      const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:';
+      for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); } }
+      updateMiniLabels(); clearRoute();
+    };
+
+    /* === Маршруты === */
+    function fillRouteNames(){ const list=routeRole.value==='op'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()]; routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join(''); }
+    routeRole.onchange=()=>{fillRouteNames(); clearRoute();};
+    routeName.onchange=clearRoute;
+
+    function currentDayShort(){ return ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date().getDay()]; }
+    function collectPoints(kind,name,dayFilter){
+      const store=kind==='op'?opsByName:techByName; const layer=store.get(name); if(!layer) return [];
+      const groupOn=kind==='op'?toggleOps.checked:toggleTech.checked; if(!groupOn) return [];
+      const targetDay = dayFilter==='TODAY' ? currentDayShort() : dayFilter; const isAll=(dayFilter==='ALL'); const pts=[];
+      layer.eachLayer(m=>{ const ll=m.getLatLng(); const nm=(m.getTooltip()?.getContent())||''; const days=m._days||[]; const allowed=isAll || (days.includes(targetDay)); if(allowed) pts.push({lat:ll.lat,lng:ll.lng,title:nm}); });
+      return pts;
+    }
+    function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
+
+    routeDay.onchange=applyDayFilter;
+
+    btnBuild.onclick=async()=>{
+      const kind=routeRole.value, name=routeName.value, day=routeDay.value;
+      if(!name){routeMeta.textContent='Выберите имя.';return;}
+      const pts=collectPoints(kind,name,day);
+      if(pts.length<2){routeMeta.textContent='Недостаточно точек по выбранному дню (или слой скрыт).';clearRoute();return;}
+      const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX)));
+      const dayLabel = day==='TODAY' ? `сегодня (${currentDayShort()})` : (day==='ALL'?'все дни':day);
+      setBadge('Маршрут по дорогам…');
+      const {totalKm,totalMin}=await drawRoadRoute(route);
+      setBadge(`${[...ST.opCounts.keys()].length} операторов • ${[...ST.techCounts.keys()].length} техников • ${ST.allMarkers.length} точек`);
+      routeMeta.textContent=`День: ${dayLabel} • Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`;
+      const csv=toCsv(route);
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+      btnDownload.onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=`route_${kind}_${name}_${day}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
+      btnDownload.disabled=false;
+    };
+    btnClear.onclick=clearRoute;
+
+    // старт
+    fillRouteNames(); applyDayFilter(); updateMiniLabels();
+    map.on('zoomend moveend',updateMiniLabels); map.on('layeradd layerremove',updateMiniLabels);
+    setBadge(`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`);
+  }catch(err){
+    console.error(err);
+    const d=document.createElement('div'); d.className='fatal';
+    d.innerHTML=`<b>Критическая ошибка</b><br>${err.message||err}`;
+    document.body.appendChild(d);
+    setBadge('Ошибка');
   }
-  return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(",")).join("\n");
-}
+})();
 
-/* === КНОПКИ МАРШРУТА === */
-routeDay.onchange=applyDayFilter;
-
-btnBuild.onclick=async()=>{
-  const kind=routeRole.value, name=routeName.value, day=routeDay.value;
-  if(!name){routeMeta.textContent="Выберите имя.";return;}
-  const pts=collectPoints(kind,name,day);
-  if(pts.length<2){routeMeta.textContent="Недостаточно точек по выбранному дню (или слой скрыт).";clearRoute();return;}
-  const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX)));
-  const dayLabel = day==="TODAY" ? `сегодня (${currentDayShort()})` : (day==="ALL"?"все дни":day);
-  setBadge("Маршрут по дорогам…");
-  const {totalKm,totalMin}=await drawRoadRoute(route);
-  setBadge(`${[...ST.opCounts.keys()].length} операторов • ${[...ST.techCounts.keys()].length} техников • ${ST.allMarkers.length} точек`);
-  routeMeta.textContent=`День: ${dayLabel} • Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`;
-  const csv=toCsv(route);
-  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
-  btnDownload.onclick=()=>{ const a=document.createElement("a"); a.href=url; a.download=`route_${kind}_${name}_${day}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
-  btnDownload.disabled=false;
-};
-btnClear.onclick=clearRoute;
-
-/* === СТАРТ: заполнить селект имён и применить фильтр === */
-function fillRouteNames(){
-  const list=routeRole.value==="op"?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
-  routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join("");
-}
-routeRole.onchange=()=>{fillRouteNames(); clearRoute();};
-routeName.onchange=clearRoute;
-
-fillRouteNames();
-applyDayFilter();
-updateMiniLabels && map.on("zoomend moveend",updateMiniLabels);
-updateMiniLabels && map.on("layeradd layerremove",updateMiniLabels);
-
-// всё ок — дальше ловим ошибки ниже
-}catch(err){
-  console.error(err);
-  const d=document.createElement("div"); d.className="fatal";
-  d.innerHTML=`<b>Критическая ошибка</b><br>${err.message||err}`;
-  document.body.appendChild(d);
-  setBadge("Ошибка");
-}
-
-/* === ПРОЧЕЕ === */
-document.getElementById("filtersToggle").onclick=()=>document.body.classList.toggle("filters-closed");
+document.getElementById('filtersToggle').onclick=()=>document.body.classList.toggle('filters-closed');
 </script>
 </body>
 </html>
