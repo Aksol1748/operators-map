@@ -1,4 +1,4 @@
-  <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8"/>
@@ -49,11 +49,12 @@
     font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     box-shadow:0 1px 2px rgba(0,0,0,.08);
     z-index:8000;
-    .as-link{color:#2f80ed;cursor:pointer;text-decoration:underline;font-weight:600}
-    .tech-picker{display:none;margin-top:6px}
-    .tech-picker select{padding:6px 8px;border:1px solid #ddd;border-radius:8px;font:600 12px system-ui}
-    .tech-picker button{margin-left:6px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
   }
+  /* стили для пикапа техника (были случайно вложены внутрь mini-label) */
+  .as-link{color:#2f80ed;cursor:pointer;text-decoration:underline;font-weight:600}
+  .tech-picker{display:none;margin-top:6px}
+  .tech-picker select{padding:6px 8px;border:1px solid #ddd;border-radius:8px;font:600 12px system-ui}
+  .tech-picker button{margin-left:6px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -110,7 +111,6 @@
 </aside>
 
 <noscript>Нужен JavaScript</noscript>
-
 <script type="module">
 /* === КОНФИГ === */
 const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
@@ -182,83 +182,49 @@ async function saveRemoteColor(kind,name,color){
 function getColor(kind,name,base){const key=`${kind}:${name}`;return savedLocal[key]||base||autoColor(key);}
 function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex;saveLocal(savedLocal);saveRemoteColor(kind,name,hex);}
 
-/* === КАРТА === */
+/* === КАРТА: загрузка либ === */
 setBadge("Грузим библиотеки…");
 await loadStyle("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css");
 await loadScript("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js");
 await loadScript("https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js");
 if(!window.L||!window.Papa) throw new Error("Либы не загрузились");
 
+/* === КАРТА === */
 const map=L.map("map",{attributionControl:false}).setView([55.75,37.62],9);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
 L.control.attribution({prefix:false}).addTo(map);
 map.createPane("techPane"); map.getPane("techPane").style.zIndex=430;
 map.createPane("opPane");   map.getPane("opPane").style.zIndex=450;
-  map.on('popupopen', (e)=>{
-  const root = e.popup.getElement();
-  if(!root) return;
-
-  const change = root.querySelector('.js-change-tech');
-  const picker = root.querySelector('.tech-picker');
-
-  if(change && picker){
-    const locId = change.dataset.loc;
-
-    // открыть селектор
-    change.addEventListener('click', ()=>{
-      picker.style.display = 'block';
-    });
-
-    // отмена
-    picker.querySelector('.tech-cancel').addEventListener('click', ()=>{
-      picker.style.display = 'none';
-    });
-
-    // применить
-    picker.querySelector('.tech-apply').addEventListener('click', ()=>{
-      const sel = picker.querySelector('.tech-select');
-      const newTech = sel.value;
-      const marker = ST.allMarkers.find(m=>m._locId===locId);
-      if(marker){
-        reassignTech(marker, newTech);
-        // перерисуем попап с обновлённым именем и снова навесим обработчики
-        e.popup.setContent( techPopupHTML({
-          title: marker._miniTitle || '',
-          tech: marker._techName || '',
-          cntText: marker._cntText || '',
-          daysText: marker._daysText || '',
-          locId
-        }) );
-        // переинициализируем хендлеры сразу
-        setTimeout(()=>map.fire('popupopen', {popup:e.popup}), 0);
-      }
-    });
-  }
-});
-
 
 /* === МИНИ-ЛЕЙБЛЫ === */
 const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
 const MINI_ZOOM = 12;
 const MAX_MINI_LABELS = IS_MOBILE ? 100 : 120;
-/* безопасные алиасы кадра */
-const RAF = (typeof requestAnimationFrame==='function') ? requestAnimationFrame : (fn)=>setTimeout(fn,0);
-const CAF = (typeof cancelAnimationFrame==='function') ? cancelAnimationFrame : (id)=>clearTimeout(id);
+// безопасные алиасы кадра
+const RAF = (typeof requestAnimationFrame==='function') ? (fn)=>requestAnimationFrame(fn) : (fn)=>setTimeout(fn,0);
+const CAF = (typeof cancelAnimationFrame==='function') ? (id)=>cancelAnimationFrame(id) : (id)=>clearTimeout(id);
 let miniRafId = null;
 
 /* === СЛОИ / СТАТЫ === */
 const ST={opCounts:new Map(),opDevices:new Map(),techCounts:new Map(),techDevices:new Map(),allMarkers:[]};
 const opsByName=new Map(), techByName=new Map();
 function layerFor(mapObj,name){if(!mapObj.has(name))mapObj.set(name,L.layerGroup().addTo(map));return mapObj.get(name);}
+
+/* === Маркеры === */
 function triangleMarker(latlng,color){
   const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
   const icon=L.divIcon({html:svg,className:"",iconSize:[22,22],iconAnchor:[11,18]});
   return L.marker(latlng,{icon,pane:"techPane"});
-  function getAllTechNames(){
-  // список имён техников по текущим данным
-  return [...ST.techCounts.keys()].sort((a,b)=>a.localeCompare(b,'ru'));
+}
+function recolorTriangleMarker(marker,color){
+  const el=marker.getElement(); if(!el) return;
+  const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill",color);
 }
 
+/* === Попап-редактор техника === */
+function getAllTechNames(){
+  return [...ST.techCounts.keys()].sort((a,b)=>a.localeCompare(b,'ru'));
+}
 function techPopupHTML({title, tech, cntText='', daysText='', locId}){
   return `<b>${title}</b><br>
     Техник: <span class="as-link js-change-tech" data-loc="${locId}">${tech||'—'}</span>${cntText}${daysText}
@@ -270,8 +236,6 @@ function techPopupHTML({title, tech, cntText='', daysText='', locId}){
       <button class="tech-cancel">Отмена</button>
     </div>`;
 }
-
-// обновляем цифру в строке списка техников (сохраняем хвост " (ТАxxx)" если он есть)
 function updateTechRowCount(name){
   if(!name) return;
   const cb = document.getElementById(safeId('tech:'+name));
@@ -281,49 +245,40 @@ function updateTechRowCount(name){
   const tail = (span.textContent.match(/\s*\(.+\)$/) || [''])[0];
   span.textContent = (ST.techCounts.get(name)||0) + tail;
 }
-
 function reassignTech(marker, newTech){
   const oldTech = marker._techName || '';
   if(!newTech || newTech===oldTech) return;
 
-  // убрать из старого слоя
   const oldLg = techByName.get(oldTech);
   if(oldLg) oldLg.removeLayer(marker);
 
-  // добавить в новый слой (создаём, если вдруг нет)
   let newLg = techByName.get(newTech);
   if(!newLg){
-    newLg = L.layerGroup(); // не добавляем сразу на карту — уважаем чекбокс
+    newLg = L.layerGroup();
     techByName.set(newTech, newLg);
   }
   newLg.addLayer(marker);
 
-  // обновить счётчики
   ST.techCounts.set(oldTech, Math.max(0,(ST.techCounts.get(oldTech)||1)-1));
   ST.techCounts.set(newTech, (ST.techCounts.get(newTech)||0)+1);
   updateTechRowCount(oldTech);
   updateTechRowCount(newTech);
 
-  // перекрасить маркер под цвет нового техника
   const hex = getColor('tech', newTech, autoColor('tech:'+newTech));
   recolorTriangleMarker(marker, hex);
   marker._color = hex;
   marker._techName = newTech;
 
-  // уважить видимость по чекбоксам/тумблеру «Техники»
   const newCB = document.getElementById(safeId('tech:'+newTech));
   if(!(document.getElementById('toggleTech').checked && newCB && newCB.checked)){
-    // если группа выключена — не держим слой на карте
     map.removeLayer(newLg);
   }
 
-  applyDayFilter();
-  updateMiniLabels();
+  applyDayFilter?.();
+  updateMiniLabels?.();
 }
-function recolorTriangleMarker(marker,color){
-  const el=marker.getElement(); if(!el) return;
-  const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill",color);
-}
+
+/* === Мини-лейблы === */
 function ensureMini(marker,title){ if(marker._mini) return marker._mini; marker._mini=L.tooltip({permanent:true,direction:"right",offset:[10,-2],className:"mini-label"}).setContent(title); return marker._mini; }
 function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
 function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
@@ -413,9 +368,45 @@ async function drawRoadRoute(ordered){
     routeIndices.push(L.marker([p.lat,p.lng],{icon:div,interactive:false,zIndexOffset:1000}).addTo(map));
   });
   map.fitBounds(routeLayer.getBounds().pad(0.2));
+  RAF(()=>updateMiniLabels());
   return {totalKm,totalMin};
 }
 
+/* === Обработчик кликов в попапе === */
+map.on('popupopen', (e)=>{
+  const root = e.popup.getElement();
+  if(!root) return;
+
+  const change = root.querySelector('.js-change-tech');
+  const picker = root.querySelector('.tech-picker');
+
+  if(change && picker){
+    const locId = change.dataset.loc;
+
+    change.addEventListener('click', ()=>{
+      picker.style.display = 'block';
+    });
+    picker.querySelector('.tech-cancel').addEventListener('click', ()=>{
+      picker.style.display = 'none';
+    });
+    picker.querySelector('.tech-apply').addEventListener('click', ()=>{
+      const sel = picker.querySelector('.tech-select');
+      const newTech = sel.value;
+      const marker = ST.allMarkers.find(m=>m._locId===locId);
+      if(marker){
+        reassignTech(marker, newTech);
+        e.popup.setContent( techPopupHTML({
+          title: marker._miniTitle || '',
+          tech: marker._techName || '',
+          cntText: marker._cntText || '',
+          daysText: marker._daysText || '',
+          locId
+        }) );
+        setTimeout(()=>map.fire('popupopen', {popup:e.popup}), 0);
+      }
+    });
+  }
+});
 /* === ЗАГРУЗКА ДАННЫХ === */
 try{
   Object.assign(savedLocal,await loadRemoteColors()); saveLocal(savedLocal);
@@ -452,7 +443,6 @@ try{
     }
     return best;
   }
-
   function tagMarker(m,title,days,color){ m._miniTitle=title; m._days=days||[]; m._color=color; return m; }
 
   for(const r of rows){
@@ -468,7 +458,7 @@ try{
       const color=getColor("tech",tech,autoColor("tech:"+tech));
       const lg=layerFor(techByName,tech);
       const m=triangleMarker([lat,lng],color)
-      .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]});
+        .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]});
       m._locId = safeId(`pt:${title}|${lat}|${lng}`);
       m._techName = tech;
       m._cntText = cntText;
@@ -497,7 +487,7 @@ try{
   if(ST.allMarkers.length){
     const g=L.featureGroup(ST.allMarkers);
     map.fitBounds(g.getBounds().pad(0.2));
-    RAF(updateMiniLabels); // гарантируем первую отрисовку мини-лейблов после fitBounds
+    RAF(()=>updateMiniLabels());
   }
 
   const opsList=[...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
@@ -522,7 +512,6 @@ try{
       updateMiniLabels();
     });
   }
-
   function addRow(targetUl,kind,name,count,devices){
     const id=safeId(`${kind}:${name}`); const sw=kind==="tech"?"swatch tri":"swatch";
     const li=document.createElement("li");
@@ -541,7 +530,7 @@ try{
   for(const op of opsList){addRow(opsUL,"op",op,ST.opCounts.get(op)||0,ST.opDevices.get(op)||0);}
   for(const t of techList){addRow(techUL,"tech",t,ST.techCounts.get(t)||0,ST.techDevices.get(t)||0);}
 
-  /* === ПЕРЕКЛЮЧАТЕЛИ === */
+  /* === Переключатели === */
   const toggleOps=document.getElementById("toggleOps");
   const toggleTech=document.getElementById("toggleTech");
 
@@ -634,7 +623,7 @@ try{
   toggleTech.onchange=applyVisibility;
   applyVisibility();
 
-  /* === ВКЛАДКИ / МАСС-КНОПКИ === */
+  /* === Вкладки / массовые кнопки === */
   let activeTab="ops";
   const tabOpsBtn=document.getElementById("tabOps"), tabTechBtn=document.getElementById("tabTech"), tabRouteBtn=document.getElementById("tabRoute");
   const routePanel=document.getElementById("routePanel");
