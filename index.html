@@ -32,7 +32,6 @@
   .route-box{border-top:1px dashed #e3e3e3;margin:6px;padding:10px 6px 4px}
   .route-row{display:flex;gap:8px;margin:6px 0}
   .route-row select,.route-row button,.route-row label{flex:1 1 auto;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#fff;font:600 12px;cursor:pointer}
-  .route-row label{display:flex;align-items:center;gap:8px}
   .route-row button{cursor:pointer}
   .route-row button.primary{background:#2f80ed;color:#fff;border-color:#2f80ed}
   .route-meta{font-size:12px;color:#555;margin:4px 0 0 2px}
@@ -79,12 +78,11 @@
     </div>
     <div class="route-row">
       <select id="routeDay">
-        <option value="TODAY" selected>Сегодня</option>
-        <option value="ALL">Все дни</option>
+        <option value="TODAY">Сегодня</option>
+        <option value="ALL" selected>Все дни</option>
         <option value="Пн">Пн</option><option value="Вт">Вт</option><option value="Ср">Ср</option>
         <option value="Чт">Чт</option><option value="Пт">Пт</option><option value="Сб">Сб</option><option value="Вс">Вс</option>
       </select>
-      <label for="dayOnly"><input id="dayOnly" type="checkbox" checked> только этот день</label>
     </div>
     <div class="route-row">
       <button id="btnBuild" class="primary">Построить маршрут</button>
@@ -118,13 +116,12 @@ async function loadStyle(href){await new Promise((res,rej)=>{const l=document.cr
 async function loadScript(src){await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 function addBuster(u){return u+(u.includes('?')?'&':'?')+'v='+Date.now();}
 async function fetchCsv(url){const r=await fetch(addBuster(url),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const t=await r.text();if(/^</.test(t))throw new Error('HTML вместо CSV');return t;}
-const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const num=v=>typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm=s=>(s??'').toString().trim();
 function detect(keys,cands){const lower=keys.map(k=>k.toLowerCase());for(const c of cands){const i=lower.indexOf(c.toLowerCase());if(i!==-1)return keys[i];}for(const k of keys){const lk=k.toLowerCase();if(cands.some(cc=>lk.includes(cc.toLowerCase())))return k;}return null;}
 const safeId=str=>'id_'+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join('');
 function djb2(str){let h=5381;for(let i=0;i<str.length;i++){h=((h<<5)+h)+str.charCodeAt(i);h|=0;}return Math.abs(h);}
-function hslToHex(h,s,l){h/=360;s/=100;l/=100;const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;const hr=t=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p;};const r=Math.round(255*hr(h+1/3)),g=Math.round(255*hr(h)),b=Math.round(255*hr(h-1/3));return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
+function hslToHex(h,s,l){h/=360;s/=100;l/=100;const q=l<.5?l*(1+s):l+s-l*s,p=2*l-q;const hr=t=>{if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-т)*6;return p;};const r=Math.round(255*hr(h+1/3)),g=Math.round(255*hr(h)),b=Math.round(255*hr(h-1/3));return`#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;}
 function autoColor(key){const h=djb2(key.toLowerCase());return hslToHex(h%360,55+(h%30),45+((h/7|0)%20));}
 
 /* === СИНХРОН ЦВЕТОВ === */
@@ -166,11 +163,10 @@ function ensureMini(marker,title){ if(marker._mini) return marker._mini; marker.
 function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
 function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
 
-/* === DOM ССЫЛКИ ДЛЯ «Маршрутов» === */
+/* === DOM: «Маршруты» === */
 const routeRole=document.getElementById('routeRole'),
       routeName=document.getElementById('routeName'),
       routeDay=document.getElementById('routeDay'),
-      dayOnly=document.getElementById('dayOnly'),
       btnBuild=document.getElementById('btnBuild'),
       btnClear=document.getElementById('btnClear'),
       btnDownload=document.getElementById('btnDownload'),
@@ -306,7 +302,7 @@ try{
       const layer=store.get(name);
       layer.eachLayer(m=> kind==='op'? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
       layer.eachLayer(m=>{ m._color=hex; });
-      updateMiniLabels(); // мгновенно обновить мини-лейблы
+      updateMiniLabels();
     });
   }
 
@@ -328,7 +324,7 @@ try{
   for(const op of opsList){addRow(opsUL,'op',op,ST.opCounts.get(op)||0,ST.opDevices.get(op)||0);}
   for(const t of techList){addRow(techUL,'tech',t,ST.techCounts.get(t)||0,ST.techDevices.get(t)||0);}
 
-  /* === ГЛОБАЛЬНЫЕ ПЕРЕКЛЮЧАТЕЛИ === */
+  /* === ГЛОБАЛ. ПЕРЕКЛЮЧАТЕЛИ === */
   const toggleOps=document.getElementById('toggleOps');
   const toggleTech=document.getElementById('toggleTech');
 
@@ -359,37 +355,59 @@ try{
     });
   }
 
+  function resetMarkerStyle(m){
+    if (m.setStyle) {
+      m.setStyle({ fillColor: m._color, fillOpacity: 0.9, color:'#222', opacity: 1 });
+    } else {
+      const el=m.getElement(); if(!el) return;
+      const pg=el.querySelector('polygon');
+      if(pg) pg.setAttribute('fill', m._color);
+      el.style.opacity = 1;
+      el.style.pointerEvents = '';
+    }
+  }
+
   function applyDayFilter(){
     const daySel=routeDay.value;
-    const only=dayOnly.checked;
     const showAll = (daySel==='ALL');
-    const target = daySel==='TODAY' ? (['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date().getDay()]) : daySel;
 
-    const styleForMatch=(m,match,hardHide=false)=>{
+    // «Все дни» — не фильтруем вовсе
+    if (showAll) {
+      ST.allMarkers.forEach(resetMarkerStyle);
+      updateMiniLabels();
+      clearRoute();
+      return;
+    }
+
+    const target = daySel==='TODAY'
+      ? (['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date().getDay()])
+      : daySel;
+
+    const styleForMatch=(m,match)=>{
       if(m.setStyle){
         m.setStyle({
           fillColor: match ? m._color : '#c8c8c8',
-          fillOpacity: hardHide? (match?0.9:0) : (match?0.9:0.15),
+          fillOpacity: match ? 0.9 : 0.15,
           color:'#222',
-          opacity: hardHide? (match?1:0) : (match?1:0.2)
+          opacity: match ? 1 : 0.2
         });
       }else{
         const el=m.getElement(); if(!el) return;
         const pg=el.querySelector('polygon');
         if(pg)pg.setAttribute('fill', match ? m._color : '#c8c8c8');
-        el.style.opacity = hardHide? (match?1:0) : (match?1:0.35);
-        el.style.pointerEvents = (hardHide && !match) ? 'none' : '';
+        el.style.opacity = match ? 1 : 0.35;
+        el.style.pointerEvents = ''; // клики не блокируем
       }
       if(!match) hideMini(m);
     };
 
     ST.allMarkers.forEach(m=>{
       const days=m._days||[];
-      const match = showAll || days.includes(target);
-      styleForMatch(m,match,!showAll && only);
+      const match = days.includes(target);
+      styleForMatch(m,match);
     });
     updateMiniLabels();
-    clearRoute(); // смена дня — убираем индексы маршрута
+    clearRoute();
   }
 
   function applyVisibility(){
@@ -406,7 +424,7 @@ try{
   toggleTech.onchange=applyVisibility;
   applyVisibility();
 
-  /* === ВКЛАДКИ / МАССОВЫЕ КНОПКИ === */
+  /* === ВКЛАДКИ / МАСС. КНОПКИ === */
   let activeTab='ops';
   const tabOpsBtn=document.getElementById('tabOps'), tabTechBtn=document.getElementById('tabTech'), tabRouteBtn=document.getElementById('tabRoute');
   const routePanel=document.getElementById('routePanel');
@@ -474,7 +492,6 @@ try{
   function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
 
   routeDay.onchange=applyDayFilter;
-  dayOnly.onchange=applyDayFilter;
 
   btnBuild.onclick=async()=>{
     const kind=routeRole.value, name=routeName.value, day=routeDay.value;
@@ -494,7 +511,7 @@ try{
   };
   btnClear.onclick=clearRoute;
 
-  // стартовые подписи и фильтр дня
+  // старт
   fillRouteNames();
   applyDayFilter();
   updateMiniLabels();
