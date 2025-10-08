@@ -1,300 +1,635 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Карта операторов</title>
-
-  <!-- Leaflet (карта) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
-  <!-- PapaParse (парсер CSV) -->
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
-  <style>
-    html, body { height:100%; margin:0; }
-    #map { height:100%; width:100%; }
-    .leaflet-popup-content { font:14px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-
-    /* Бейдж статуса справа сверху */
-    #status-badge{
-      position:fixed; right:12px; top:12px; z-index:5000;
-      padding:8px 10px; border-radius:8px; color:#fff;
-      font:14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      box-shadow:0 2px 8px rgba(0,0,0,.2); background:#0b6;
-    }
-
-    /* Кнопка "Операторы" слева сверху */
-    #opener{
-      position:fixed; left:12px; top:12px; z-index:5001;
-      padding:8px 12px; background:#2d6cdf; color:#fff; border:none; border-radius:10px;
-      font:14px/1 system-ui; box-shadow:0 2px 8px rgba(0,0,0,.2); cursor:pointer;
-    }
-
-    /* Панель операторов (слева) */
-    #panel{
-      position:fixed; left:12px; top:56px; bottom:12px; width:300px; z-index:5000;
-      display:none; flex-direction:column; gap:10px;
-      background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:10px;
-      box-shadow:0 8px 24px rgba(0,0,0,.15);
-    }
-    #panel.show{ display:flex; }
-    #panel h3{ margin:0; font:600 16px/1.1 system-ui; }
-    #search{
-      width:100%; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; font:14px system-ui;
-    }
-    #ops{ flex:1; overflow:auto; border:1px solid #eee; border-radius:8px; padding:8px; }
-    .op-row{ display:flex; align-items:center; gap:8px; padding:4px 0; }
-    .op-row label{ flex:1; cursor:pointer; }
-    .toolbar{ display:flex; gap:8px; }
-    .toolbar button{
-      flex:1; padding:6px 8px; background:#f3f4f6; border:1px solid #e5e7eb; border-radius:8px; cursor:pointer;
-      font:14px system-ui;
-    }
-    .small{ color:#6b7280; font:12px/1 system-ui; }
-    @media (max-width: 480px){
-      #panel{ width:88vw; left:6vw; }
-    }
-  </style>
+<meta charset="utf-8"/>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ASPGroupMap — один лист «Маршруты»</title>
+<style>
+  html,body{height:100%;margin:0}
+  #map{position:absolute;inset:0;background:#f4f4f4}
+  .status-badge{position:absolute;top:8px;right:8px;z-index:10000;background:rgba(0,0,0,.85);color:#fff;padding:6px 10px;border-radius:12px;font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .filters-toggle{position:absolute;top:8px;left:8px;z-index:10001;background:#fff;border:1px solid #ddd;border-radius:10px;padding:8px 10px;font:600 13px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12);cursor:pointer}
+  aside#filters{position:absolute;top:52px;left:8px;z-index:1000;width:320px;max-width:calc(100vw - 16px);max-height:calc(100vh - 60px);overflow:auto;background:#fff;border:1px solid #ddd;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.15);padding:10px;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;transition:transform .25s ease}
+  body.filters-closed aside#filters{transform:translateX(-110%)}
+  #filters h3{margin:4px 6px 6px;font-size:14px;position:sticky;top:0;background:#fff;z-index:3;padding-top:6px}
+  #filters .muted{color:#666;font-size:12px;margin-left:6px}
+  .view-toggle{display:flex;gap:10px;align-items:center;padding:6px;position:sticky;top:28px;background:#fff;z-index:3}
+  .view-toggle label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer}
+  .tabs{display:flex;gap:6px;padding:6px;position:sticky;top:60px;background:#fff;z-index:2}
+  .tabs button{flex:1 1 33%;padding:6px 8px;border:1px solid #ddd;background:#f7f7f7;border-radius:8px;font:600 12px;cursor:pointer}
+  .tabs button.active{background:#fff;border-color:#bbb}
+  .toolbar{display:flex;gap:8px;margin:4px 6px 6px;position:sticky;top:92px;background:#fff;z-index:2;padding-bottom:6px}
+  .toolbar button{flex:1 1 auto;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
+  #opsList,#techList{list-style:none;margin:8px 6px 10px;padding:0}
+  #opsList li,#techList li{display:flex;align-items:center;gap:8px;padding:6px 0}
+  .swatch{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.2);flex:0 0 14px;cursor:pointer;position:relative}
+  .swatch.tri{border-radius:3px;clip-path:polygon(50% 0%,0% 100%,100% 100%)}
+  .swatch input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .count{margin-left:auto;color:#888;font-size:12px}
+  .route-box{border-top:1px dashed #e3e3e3;margin:6px;padding:10px 6px 4px}
+  .route-row{display:flex;gap:8px;margin:6px 0}
+  .route-row select,.route-row button{flex:1 1 auto;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#fff;font:600 12px;cursor:pointer}
+  .route-row button.primary{background:#2f80ed;color:#fff;border-color:#2f80ed}
+  .route-meta{font-size:12px;color:#555;margin:4px 0 0 2px}
+  .route-actions{display:flex;gap:8px;margin:6px 0}
+  .route-actions button{flex:1 1 auto;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
+  .fatal{position:absolute;left:8px;right:8px;bottom:8px;z-index:10002;background:#fff;border:1px solid #ddd;border-radius:12px;padding:10px;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  .leaflet-control-attribution a[href*="leafletjs.com"]{display:none!important}
+  .route-index{background:#222;color:#fff;border-radius:10px;font:700 11px/16px system-ui;width:16px;height:16px;text-align:center;display:inline-block;transform:translate(-9px,-9px);pointer-events:none}
+  .leaflet-tooltip.mini-label{
+    pointer-events:none;
+    background:rgba(255,255,255,.9);
+    color:#111;
+    border:1px solid rgba(0,0,0,.15);
+    padding:1px 4px;
+    border-radius:6px;
+    font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    box-shadow:0 1px 2px rgba(0,0,0,.08);
+    z-index:8000;
+  }
+</style>
 </head>
 <body>
-  <div id="map"></div>
-  <div id="status-badge">Загружаю…</div>
-  <button id="opener">Операторы</button>
+<div id="map"></div>
+<div class="status-badge" id="statusBadge">Загрузка…</div>
+<button class="filters-toggle" id="filtersToggle">Фильтры</button>
 
-  <div id="panel">
-    <h3>Операторы <span id="counts" class="small"></span></h3>
-    <input id="search" type="search" placeholder="Поиск по имени…" />
-    <div class="toolbar">
-      <button id="selectAll">Выбрать всех</button>
-      <button id="clearAll">Снять все</button>
-    </div>
-    <div id="ops"></div>
-    <div class="toolbar">
-      <button id="fitBounds">Показать все видимые</button>
-    </div>
+<aside id="filters" aria-label="Фильтры">
+  <h3>Списки <span class="muted" id="totals"></span></h3>
+  <div class="view-toggle">
+    <label><input type="checkbox" id="toggleOps" checked>Операторы</label>
+    <label><input type="checkbox" id="toggleTech">Техники</label>
   </div>
+  <div class="tabs">
+    <button id="tabOps" class="active">Операторы</button>
+    <button id="tabTech">Техники</button>
+    <button id="tabRoute">Маршруты</button>
+  </div>
+  <div class="toolbar">
+    <button id="btnShowAll">Показать всех</button>
+    <button id="btnHideAll">Скрыть всех</button>
+  </div>
+  <ul id="opsList"></ul>
+  <ul id="techList" style="display:none"></ul>
 
-  <script>
-    /***** CSV-ССЫЛКИ ИЗ ТВОЕЙ ТАБЛИЦЫ *****/
-    /* Лист "operators": один столбец "operator" */
-    const OPS_CSV_URL =
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=304610077&single=true&output=csv';
+  <div id="routePanel" class="route-box" style="display:none">
+    <div class="route-row">
+      <select id="routeRole">
+        <option value="op" selected>Операторы</option>
+        <option value="tech">Техники</option>
+      </select>
+      <select id="routeName">
+        <option value="" selected disabled>— выберите —</option>
+      </select>
+    </div>
+    <div class="route-row">
+      <select id="routeDay">
+        <option value="TODAY">Сегодня</option>
+        <option value="ALL" selected>Все дни</option>
+        <option value="Пн">Пн</option><option value="Вт">Вт</option><option value="Ср">Ср</option>
+        <option value="Чт">Чт</option><option value="Пт">Пт</option><option value="Сб">Сб</option><option value="Вс">Вс</option>
+      </select>
+    </div>
+    <div class="route-row">
+      <button id="btnBuild" class="primary">Построить маршрут</button>
+      <button id="btnClear">Очистить</button>
+    </div>
+    <div class="route-actions">
+      <button id="btnDownload" disabled>Скачать CSV</button>
+    </div>
+    <div id="routeMeta" class="route-meta">Маршрут не построен.</div>
+    <div class="route-meta">⚠️ По дорогам (OSRM), без пробок.</div>
+  </div>
+</aside>
 
-    /* Лист "points": столбцы id,name,lat,lng,operator,class,freq,sales */
-    const POINTS_CSV_URL =
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP/pub?gid=0&single=true&output=csv';
-    /*****************************************/
+<noscript>Нужен JavaScript</noscript>
 
-    /* ========= карта ========= */
-    const map = L.map('map', { zoomControl:true }).setView([55.75, 37.62], 10);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19, attribution: '© OpenStreetMap'
-    }).addTo(map);
+<script type="module">
+/* === КОНФИГ === */
+const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
+const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
+const COLOR_SYNC_URL="https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0ZQ/exec";
+const ENABLE_SYNC=!!COLOR_SYNC_URL&&/^https?:\/\//.test(COLOR_SYNC_URL);
+const COLOR_SYNC_GET=ENABLE_SYNC?("https://r.jina.ai/http/"+COLOR_SYNC_URL.replace(/^https?:\/\//,"")):"";
 
-    const badge = document.getElementById('status-badge');
-    const setBadge = (t,bad=false)=>{ badge.textContent=t; badge.style.background=bad?'#d33':'#0b6'; };
+/* === УТИЛИТЫ === */
+const badge=document.getElementById("statusBadge");
+const setBadge=(msg)=>{badge.textContent=msg};
 
-    const groupsByOperator = new Map();   // operator -> L.LayerGroup
-    const markers = [];                   // все маркеры
-    let allOperators = [];                // список имён
+async function loadStyle(href){await new Promise((resolve,reject)=>{const el=document.createElement("link");el.rel="stylesheet";el.href=href;el.onload=resolve;el.onerror=reject;document.head.appendChild(el);});}
+async function loadScript(src){await new Promise((resolve,reject)=>{const el=document.createElement("script");el.src=src;el.onload=resolve;el.onerror=reject;document.head.appendChild(el);});}
+function addBuster(url){return url+(url.includes("?")?"&":"?")+"v="+Date.now();}
+async function fetchCsv(url){
+  const resp=await fetch(addBuster(url),{cache:"no-store"});
+  if(!resp.ok) throw new Error("HTTP "+resp.status);
+  const text=await resp.text();
+  if(/^</.test(text)) throw new Error("HTML вместо CSV");
+  return text;
+}
+const toNum=(v)=>typeof v==="string"?Number(v.replace(",",".").trim()):Number(v);
+const norm=(s)=>String(s??"").trim();
+function detect(keys,cands){
+  const lower=keys.map(k=>k.toLowerCase());
+  for(const cand of cands){const idx=lower.indexOf(cand.toLowerCase()); if(idx!==-1) return keys[idx];}
+  for(const k of keys){const lk=k.toLowerCase(); if(cands.some(cc=>lk.includes(cc.toLowerCase()))) return k;}
+  return null;
+}
+const safeId=(str)=>"id_"+Array.from(str).map(ch=>ch.charCodeAt(0).toString(16)).join("");
+function djb2(str){let h=5381;for(let i=0;i<str.length;i++){h=((h<<5)+h)+str.charCodeAt(i);h|=0;}return Math.abs(h);}
+function hslToHex(h,s,l){
+  h/=360; s/=100; l/=100;
+  const q = l<.5 ? l*(1+s) : l+s-l*s, p = 2*l - q;
+  const hue = (x)=>{ if(x<0)x+=1; if(x>1)x-=1;
+    if(x<1/6) return p+(q-p)*6*x;
+    if(x<1/2) return q;
+    if(x<2/3) return p+(q-p)*(2/3-x)*6;
+    return p;
+  };
+  const r=Math.round(255*hue(h+1/3)),
+        g=Math.round(255*hue(h)),
+        b=Math.round(255*hue(h-1/3));
+  return `#${r.toString(16).padStart(2,"0")}${g.toString(16).padStart(2,"0")}${b.toString(16).padStart(2,"0")}`;
+}
+const autoColor=(key)=>{const h=djb2(key.toLowerCase());return hslToHex(h%360,55+(h%30),45+((h/7|0)%20));};
 
-    /* ========= загрузка CSV ========= */
-    const toNum = v => (typeof v === 'number') ? v
-                   : (typeof v === 'string') ? Number(v.replace(',', '.').trim())
-                   : NaN;
+/* === СИНХРОН ЦВЕТОВ === */
+const LS_KEY="operators-map:colors";
+function loadLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}");}catch{return{}}}
+function saveLocal(obj){localStorage.setItem(LS_KEY,JSON.stringify(obj));}
+const savedLocal=loadLocal();
+async function loadRemoteColors(){
+  if(!ENABLE_SYNC) return {};
+  try{
+    const resp=await fetch(COLOR_SYNC_GET,{cache:"no-store"});
+    const txt=await resp.text();
+    const data=JSON.parse(txt);
+    return data&&data.ok?(data.colors||{}):{};
+  }catch{return {}}
+}
+async function saveRemoteColor(kind,name,color){
+  if(!ENABLE_SYNC) return;
+  try{
+    await fetch(COLOR_SYNC_URL,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind,name,color})});
+  }catch{}
+}
+function getColor(kind,name,base){const key=`${kind}:${name}`;return savedLocal[key]||base||autoColor(key);}
+function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex;saveLocal(savedLocal);saveRemoteColor(kind,name,hex);}
 
-    function loadCSV(url){
-      return new Promise((resolve, reject)=>{
-        Papa.parse(url + (url.includes('?')?'&':'?') + 't=' + Date.now(), {
-          download: true,
-          header: true,
-          skipEmptyLines: true,
-          complete: (res)=> resolve(res.data),
-          error: reject
-        });
-      });
+/* === КАРТА === */
+setBadge("Грузим библиотеки…");
+await loadStyle("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css");
+await loadScript("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js");
+await loadScript("https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js");
+if(!window.L||!window.Papa) throw new Error("Либы не загрузились");
+
+const map=L.map("map",{attributionControl:false}).setView([55.75,37.62],9);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
+L.control.attribution({prefix:false}).addTo(map);
+map.createPane("techPane"); map.getPane("techPane").style.zIndex=430;
+map.createPane("opPane");   map.getPane("opPane").style.zIndex=450;
+
+/* === МИНИ-ЛЕЙБЛЫ === */
+const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
+const MINI_ZOOM = 12;
+const MAX_MINI_LABELS = IS_MOBILE ? 100 : 120;
+/* безопасные алиасы кадра */
+const RAF = (typeof requestAnimationFrame==='function') ? requestAnimationFrame : (fn)=>setTimeout(fn,0);
+const CAF = (typeof cancelAnimationFrame==='function') ? cancelAnimationFrame : (id)=>clearTimeout(id);
+let miniRafId = null;
+
+/* === СЛОИ / СТАТЫ === */
+const ST={opCounts:new Map(),opDevices:new Map(),techCounts:new Map(),techDevices:new Map(),allMarkers:[]};
+const opsByName=new Map(), techByName=new Map();
+function layerFor(mapObj,name){if(!mapObj.has(name))mapObj.set(name,L.layerGroup().addTo(map));return mapObj.get(name);}
+function triangleMarker(latlng,color){
+  const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
+  const icon=L.divIcon({html:svg,className:"",iconSize:[22,22],iconAnchor:[11,18]});
+  return L.marker(latlng,{icon,pane:"techPane"});
+}
+function recolorTriangleMarker(marker,color){
+  const el=marker.getElement(); if(!el) return;
+  const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill",color);
+}
+function ensureMini(marker,title){ if(marker._mini) return marker._mini; marker._mini=L.tooltip({permanent:true,direction:"right",offset:[10,-2],className:"mini-label"}).setContent(title); return marker._mini; }
+function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
+function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
+
+/* === DOM: «Маршруты» === */
+const routeRole=document.getElementById("routeRole"),
+      routeName=document.getElementById("routeName"),
+      routeDay=document.getElementById("routeDay"),
+      btnBuild=document.getElementById("btnBuild"),
+      btnClear=document.getElementById("btnClear"),
+      btnDownload=document.getElementById("btnDownload"),
+      routeMeta=document.getElementById("routeMeta");
+
+/* === OSRM / маршрут === */
+const OSRM="https://router.project-osrm.org/route/v1/driving/"; const KMH_FALLBACK=30;
+function haversine(a,b){
+  const R=6371, toRad=(d)=>d*Math.PI/180;
+  const dLat=toRad(b.lat-a.lat), dLng=toRad(b.lng-a.lng);
+  const s=Math.sin(dLat/2)**2+Math.cos(toRad(a.lat))*Math.cos(toRad(b.lat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.sqrt(s));
+}
+function nnRoute(points){
+  if(points.length<=2) return points.map((p,i)=>({i,...p}));
+  const used=new Set(); const route=[]; let current=0;
+  used.add(current); route.push(points[current]);
+  while(route.length<points.length){
+    let best=-1, bestD=1e9, last=route[route.length-1];
+    for(let i=0;i<points.length;i++){
+      if(used.has(i)) continue;
+      const d=haversine(last,points[i]);
+      if(d<bestD){bestD=d; best=i;}
     }
-
-    async function loadData(){
-      const [opsRows, pointRows] = await Promise.all([
-        loadCSV(OPS_CSV_URL),
-        loadCSV(POINTS_CSV_URL),
-      ]);
-
-      const operators = Array.from(new Set(
-        opsRows.map(r => (r.operator||'').trim()).filter(Boolean)
-      )).sort((a,b)=>a.localeCompare(b,'ru'));
-
-      const points = pointRows.map(r => ({
-        id:       (r.id||'').trim(),
-        name:     (r.name||'').trim(),
-        lat:      toNum(r.lat),
-        lng:      toNum(r.lng),
-        operator: (r.operator||'').trim(),
-        class:    (r.class||'').trim(),
-        freq:     (r.freq||'').trim(),
-        sales:    (r.sales||'').trim(),
-      })).filter(p => isFinite(p.lat) && isFinite(p.lng));
-
-      return { operators, points };
-    }
-
-    /* ========= построение карты ========= */
-    function buildLayers(data){
-      const points = Array.isArray(data?.points) ? data.points : [];
-      const ops    = Array.isArray(data?.operators) ? data.operators : [];
-
-      allOperators = ops.slice();
-
-      // группы по оператору
-      for (const name of allOperators){
-        if (!groupsByOperator.has(name)){
-          const g = L.layerGroup().addTo(map);
-          g._visible = true;
-          groupsByOperator.set(name, g);
+    used.add(best); route.push(points[best]);
+  }
+  return route.map((p,i)=>({i,...p}));
+}
+function twoOpt(route){
+  const n=route.length; if(n<4) return route;
+  const dist=(i,j)=>haversine(route[i],route[j]);
+  let improved=true;
+  while(improved){
+    improved=false;
+    for(let i=1;i<n-2;i++){
+      for(let k=i+1;k<n-1;k++){
+        const d1=dist(i-1,i)+dist(k,k+1), d2=dist(i-1,k)+dist(i,k+1);
+        if(d2+1e-9<d1){
+          const rev=route.slice(i,k+1).reverse();
+          route=[...route.slice(0,i),...rev,...route.slice(k+1)];
+          improved=true;
         }
       }
-
-      const bounds = [];
-      for (const p of points){
-        const lat = Number(p.lat), lng = Number(p.lng);
-        if (!isFinite(lat) || !isFinite(lng)) continue;
-
-        const m = L.circleMarker([lat, lng], {
-          radius: 6, weight: 1, color:'#2d6cdf', fillColor:'#2d6cdf', fillOpacity:.85
-        })
-        .bindPopup(
-          `<b>${p.name ?? ''}</b><br>${p.operator ?? ''}` +
-          (p.class ? `<br>Класс: ${p.class}` : '') +
-          (p.freq  ? `<br>Частота: ${p.freq}` : '') +
-          (p.sales ? `<br>Продажи: ${p.sales}` : '')
-        );
-
-        markers.push({ marker:m, operator:p.operator ?? '' });
-
-        const g = groupsByOperator.get(p.operator) || groupsByOperator.get('') || (()=>{
-          const tmp = L.layerGroup().addTo(map); tmp._visible = true;
-          groupsByOperator.set('', tmp); return tmp;
-        })();
-
-        m.addTo(g);
-        bounds.push([lat, lng]);
-      }
-
-      if (bounds.length) map.fitBounds(bounds, { padding:[20,20] });
-      updateCounts();
-      buildPanel();
     }
+  }
+  return route;
+}
+let routeLayer=null, routeIndices=[];
+function clearRoute(){
+  if(routeLayer){map.removeLayer(routeLayer); routeLayer=null;}
+  routeIndices.forEach(el=>el.remove()); routeIndices=[];
+  routeMeta.textContent="Маршрут не построен."; btnDownload.disabled=true;
+}
+async function osrmEdge(a,b){
+  const url=`${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
+  try{
+    const resp=await fetch(url,{cache:"no-store"}); if(!resp.ok) throw new Error("osrm http "+resp.status);
+    const json=await resp.json(); const r=json.routes&&json.routes[0]; if(!r) throw new Error("osrm empty");
+    return {geom:r.geometry, distKm:r.distance/1000, durMin:r.duration/60};
+  }catch(e){
+    const d=haversine(a,b);
+    return {geom:{type:"LineString",coordinates:[[a.lng,a.lat],[b.lng,b.lat]]}, distKm:d, durMin:(d/KMH_FALLBACK)*60};
+  }
+}
+async function drawRoadRoute(ordered){
+  clearRoute();
+  let totalKm=0,totalMin=0; const features=[];
+  for(let i=1;i<ordered.length;i++){
+    const a=ordered[i-1], b=ordered[i];
+    const seg=await osrmEdge(a,b);
+    totalKm+=seg.distKm; totalMin+=seg.durMin;
+    features.push({type:"Feature",geometry:seg.geom,properties:{}});
+    await new Promise(r=>setTimeout(r,120));
+  }
+  const fc={type:"FeatureCollection",features};
+  routeLayer=L.geoJSON(fc,{style:{color:"#2f80ed",weight:5,opacity:0.9}}).addTo(map);
+  ordered.forEach((p,idx)=>{
+    const div=L.divIcon({className:"",html:`<div class="route-index">${idx+1}</div>`});
+    routeIndices.push(L.marker([p.lat,p.lng],{icon:div,interactive:false,zIndexOffset:1000}).addTo(map));
+  });
+  map.fitBounds(routeLayer.getBounds().pad(0.2));
+  return {totalKm,totalMin};
+}
 
-    function updateCounts(){
-      const totalOps = allOperators.length;
-      const totalPts = markers.length;
+/* === ЗАГРУЗКА ДАННЫХ === */
+try{
+  Object.assign(savedLocal,await loadRemoteColors()); saveLocal(savedLocal);
 
-      let visPts = 0;
-      for (const [_, g] of groupsByOperator.entries()){
-        if (!g._visible) continue;
-        let n = 0; g.eachLayer(()=>n++);
-        visPts += n;
-      }
-      document.getElementById('counts').textContent =
-        `• операторов: ${totalOps} • точек: ${visPts}/${totalPts}`;
+  setBadge("Загрузка «Маршрутов»…");
+  const csvText=await fetchCsv(ROUTES_CSV);
+  const rows=Papa.parse(csvText,{header:true,skipEmptyLines:true}).data||[];
+  if(!rows.length) throw new Error("Пустой CSV");
 
-      document.querySelectorAll('.op-row').forEach(row=>{
-        const op = row.dataset.op;
-        const g = groupsByOperator.get(op);
-        const num = row.querySelector('.num');
-        let n = 0; g && g._visible && g.eachLayer(()=>n++);
-        num.textContent = n;
-      });
+  const keys=Object.keys(rows[0]||{});
+  const techKey=detect(keys,["фио техника","technician","tech","техник"]);
+  const opKey=detect(keys,["фио оператора","оператор","fio","name","operator"]);
+  const nameKey=detect(keys,["маршрут всего локации","маршрут","локация","название","адрес","name"]);
+  const latKey=detect(keys,["lat","latitude","широта","y"]);
+  const lngKey=detect(keys,["lng","lon","longitude","долгота","x"]);
+  const dayCols=[
+    {full:detect(keys,["понедельник","monday"]),short:"Пн"},
+    {full:detect(keys,["вторник","tuesday"]),short:"Вт"},
+    {full:detect(keys,["среда","wednesday"]),short:"Ср"},
+    {full:detect(keys,["четверг","thursday"]),short:"Чт"},
+    {full:detect(keys,["пятница","friday"]),short:"Пт"},
+    {full:detect(keys,["суббота","saturday"]),short:"Сб"},
+    {full:detect(keys,["воскресенье","sunday"]),short:"Вс"},
+  ].filter(d=>d.full);
+  const countCols=keys.filter(k=>/колич|аппарат/i.test(k));
+  if(!latKey||!lngKey) throw new Error("Не найдены координаты (lat/lng)");
+  if(!nameKey) throw new Error("Не найдено название локации");
+
+  function firstOrMaxCount(row){
+    let best=null;
+    for(const k of countCols){
+      const v=Number(String(row[k]??"").replace(",",".")); if(!isFinite(v)) continue;
+      best = best==null ? v : Math.max(best,v);
     }
+    return best;
+  }
 
-    function buildPanel(){
-      const opsWrap = document.getElementById('ops');
-      opsWrap.innerHTML = '';
-      const sorted = allOperators.slice().sort((a,b)=>a.localeCompare(b,'ru'));
+  function tagMarker(m,title,days,color){ m._miniTitle=title; m._days=days||[]; m._color=color; return m; }
 
-      for (const op of sorted){
-        const g = groupsByOperator.get(op);
-        let n = 0; g && g.eachLayer(()=>n++);
+  for(const r of rows){
+    const lat=toNum(r[latKey]), lng=toNum(r[lngKey]); if(!isFinite(lat)||!isFinite(lng)) continue;
+    const title=norm(r[nameKey])||`${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    const op=opKey?norm(r[opKey]):""; const tech=techKey?norm(r[techKey]):"";
+    const cnt=firstOrMaxCount(r);
+    const days=dayCols.filter(d=>norm(r[d.full])).map(d=>d.short);
+    const cntText=cnt!=null?` • Аппаратов: ${cnt}`:"";
+    const daysText=days.length?` • Обслуживание: ${days.join(", ")}`:"";
 
-        const row = document.createElement('div');
-        row.className = 'op-row';
-        row.dataset.op = op;
-
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = !!(g && g._visible);
-        cb.addEventListener('change', ()=>{
-          if (!g) return;
-          g._visible = cb.checked;
-          if (cb.checked) g.addTo(map); else map.removeLayer(g);
-          updateCounts();
-        });
-
-        const lbl = document.createElement('label');
-        lbl.textContent = op || '(без оператора)';
-
-        const num = document.createElement('span');
-        num.className = 'small num';
-        num.textContent = cb.checked ? n : 0;
-
-        row.appendChild(cb);
-        row.appendChild(lbl);
-        row.appendChild(num);
-        opsWrap.appendChild(row);
-      }
+    if(tech){
+      const color=getColor("tech",tech,autoColor("tech:"+tech));
+      const lg=layerFor(techByName,tech);
+      const m=triangleMarker([lat,lng],color)
+        .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]})
+        .bindPopup(`<b>${title}</b><br>Техник: ${tech}${cntText}${daysText}`);
+      tagMarker(m,title,days,color);
+      lg.addLayer(m);
+      ST.techCounts.set(tech,(ST.techCounts.get(tech)||0)+1);
+      if(cnt!=null) ST.techDevices.set(tech,(ST.techDevices.get(tech)||0)+cnt);
+      ST.allMarkers.push(m);
     }
-
-    function fitVisible(){
-      const b = [];
-      for (const [_, g] of groupsByOperator.entries()){
-        if (!g._visible) continue;
-        g.eachLayer(l=>{ if (l.getLatLng) b.push(l.getLatLng()); });
-      }
-      if (b.length) map.fitBounds(L.latLngBounds(b), {padding:[20,20]});
+    if(op){
+      const color=getColor("op",op,autoColor(op));
+      const lg=layerFor(opsByName,op);
+      const m=L.circleMarker([lat,lng],{pane:"opPane",radius:7,weight:2,color:"#222",fillColor:color,fillOpacity:.9})
+        .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]})
+        .bindPopup(`<b>${title}</b><br>Оператор: ${op}${cntText}${daysText}`);
+      tagMarker(m,title,days,color);
+      lg.addLayer(m);
+      ST.opCounts.set(op,(ST.opCounts.get(op)||0)+1);
+      if(cnt!=null) ST.opDevices.set(op,(ST.opDevices.get(op)||0)+cnt);
+      ST.allMarkers.push(m);
     }
+  }
 
-    /* ========= UI ========= */
-    document.getElementById('opener').onclick = ()=>{
-      document.getElementById('panel').classList.toggle('show');
-    };
-    document.getElementById('selectAll').onclick = ()=>{
-      document.querySelectorAll('#ops .op-row input[type=checkbox]').forEach(cb=>{
-        if (!cb.checked) cb.click();
-      });
-    };
-    document.getElementById('clearAll').onclick = ()=>{
-      document.querySelectorAll('#ops .op-row input[type=checkbox]').forEach(cb=>{
-        if (cb.checked) cb.click();
-      });
-    };
-    document.getElementById('fitBounds').onclick = fitVisible;
+  if(ST.allMarkers.length){
+    const g=L.featureGroup(ST.allMarkers);
+    map.fitBounds(g.getBounds().pad(0.2));
+    RAF(updateMiniLabels); // гарантируем первую отрисовку мини-лейблов после fitBounds
+  }
 
-    document.getElementById('search').addEventListener('input', (e)=>{
-      const q = e.target.value.trim().toLowerCase();
-      document.querySelectorAll('#ops .op-row').forEach(row=>{
-        const name = row.querySelector('label').textContent.toLowerCase();
-        row.style.display = name.includes(q) ? '' : 'none';
-      });
+  const opsList=[...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
+  const techList=[...ST.techCounts.keys()].sort((a,b)=>(ST.techCounts.get(b)||0)-(ST.techCounts.get(a)||0));
+  document.getElementById("totals").textContent=`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`;
+  setBadge(`${opsList.length} операторов • ${techList.length} техников • ${ST.allMarkers.length} точек`);
+
+  const opsUL=document.getElementById("opsList"), techUL=document.getElementById("techList");
+
+  function mountColorSwatch(div,kind,name,initColor){
+    div.style.background=initColor;
+    const input=document.createElement("input"); input.type="color";
+    input.value=/^#[0-9A-Fa-f]{6}$/.test(initColor)?initColor:"#888888";
+    div.appendChild(input);
+    div.addEventListener("click",()=>input.click());
+    input.addEventListener("input",()=>{
+      const hex=input.value; setColor(kind,name,hex); div.style.background=hex;
+      const store=kind==="op"?opsByName:techByName;
+      const layer=store.get(name);
+      layer.eachLayer(m=> kind==="op" ? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
+      layer.eachLayer(m=>{ m._color=hex; });
+      updateMiniLabels();
     });
+  }
 
-    /* ========= старт ========= */
-    (async ()=>{
-      try{
-        setBadge('Загружаю данные…');
-        const data = await loadData();
-        setBadge('Данные загружены');
-        buildLayers(data);
-      }catch(err){
-        console.error(err);
-        setBadge('Ошибка: ' + err.message, true);
-        alert('Не удалось загрузить данные. Проверь CSV-ссылки и заголовки колонок.');
+  function addRow(targetUl,kind,name,count,devices){
+    const id=safeId(`${kind}:${name}`); const sw=kind==="tech"?"swatch tri":"swatch";
+    const li=document.createElement("li");
+    const devicesText=devices?` (ТА${devices})`:"";
+    li.innerHTML=`<input type="checkbox" id="${id}" checked>
+      <span class="${sw}"></span>
+      <label for="${id}">${name}</label>
+      <span class="count">${count}${devicesText}</span>`;
+    const cb=li.querySelector("input");
+    mountColorSwatch(li.querySelector(".swatch"),kind,name,getColor(kind,name,autoColor(kind==="op"?name:"tech:"+name)));
+    const layer=(kind==="op"?opsByName:techByName).get(name);
+    cb.onchange=()=>{ if(cb.checked){ const on=(kind==="op"?toggleOps.checked:toggleTech.checked); if(on) layer.addTo(map);} else { map.removeLayer(layer);} updateMiniLabels(); clearRoute(); };
+    targetUl.appendChild(li);
+  }
+
+  for(const op of opsList){addRow(opsUL,"op",op,ST.opCounts.get(op)||0,ST.opDevices.get(op)||0);}
+  for(const t of techList){addRow(techUL,"tech",t,ST.techCounts.get(t)||0,ST.techDevices.get(t)||0);}
+
+  /* === ПЕРЕКЛЮЧАТЕЛИ === */
+  const toggleOps=document.getElementById("toggleOps");
+  const toggleTech=document.getElementById("toggleTech");
+
+  function updateMiniLabels(){
+    if(miniRafId!==null) CAF(miniRafId);
+    miniRafId = RAF(()=>{
+      const showZoom=map.getZoom()>=MINI_ZOOM;
+      const bounds=map.getBounds();
+      const visible=[];
+      const opOn=toggleOps.checked, techOn=toggleTech.checked;
+
+      for(const [n,lg] of opsByName){
+        const cb=document.getElementById(safeId(`op:${n}`));
+        const on=opOn && cb?.checked;
+        lg.eachLayer(m=>{ if(on && bounds.contains(m.getLatLng())) visible.push(m); else hideMini(m); });
       }
-    })();
-  </script>
+      for(const [n,lg] of techByName){
+        const cb=document.getElementById(safeId(`tech:${n}`));
+        const on=techOn && cb?.checked;
+        lg.eachLayer(m=>{ if(on && bounds.contains(m.getLatLng())) visible.push(m); else hideMini(m); });
+      }
+      if(!showZoom){ visible.forEach(hideMini); return; }
+      const limit=Math.min(MAX_MINI_LABELS,visible.length);
+      for(let i=0;i<visible.length;i++){
+        const m=visible[i];
+        if(i<limit){ if(!m._mini) ensureMini(m,m._miniTitle||""); showMini(m); } else hideMini(m);
+      }
+    });
+  }
+
+  function resetMarkerStyle(m){
+    if(m.setStyle){
+      m.setStyle({ fillColor:m._color, fillOpacity:0.9, color:"#222", opacity:1 });
+    }else{
+      const el=m.getElement(); if(!el) return;
+      const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill",m._color);
+      el.style.opacity=1; el.style.pointerEvents="";
+    }
+  }
+
+  function applyDayFilter(){
+    const daySel=routeDay.value;
+    const showAll=(daySel==="ALL");
+
+    if(showAll){
+      ST.allMarkers.forEach(resetMarkerStyle);
+      updateMiniLabels();
+      clearRoute();
+      return;
+    }
+
+    const todayShort=["Вс","Пн","Вт","Ср","Чт","Пт","Сб"][new Date().getDay()];
+    const target = (daySel==="TODAY") ? todayShort : daySel;
+
+    const styleForMatch=(m,match)=>{
+      if(m.setStyle){
+        m.setStyle({
+          fillColor: match ? m._color : "#c8c8c8",
+          fillOpacity: match ? 0.9 : 0.15,
+          color:"#222", opacity: match ? 1 : 0.2
+        });
+      }else{
+        const el=m.getElement(); if(!el) return;
+        const pg=el.querySelector("polygon"); if(pg) pg.setAttribute("fill", match ? m._color : "#c8c8c8");
+        el.style.opacity = match ? 1 : 0.35;
+        el.style.pointerEvents = "";
+      }
+      if(!match) hideMini(m);
+    };
+
+    ST.allMarkers.forEach(m=>{
+      const days=m._days||[];
+      const match=days.includes(target);
+      styleForMatch(m,match);
+    });
+    updateMiniLabels();
+    clearRoute();
+  }
+
+  function applyVisibility(){
+    const opOn=toggleOps.checked, techOn=toggleTech.checked;
+    for(const [,lg] of opsByName) map.removeLayer(lg);
+    for(const [,lg] of techByName) map.removeLayer(lg);
+    if(opOn){ for(const [n,lg] of opsByName){ const cb=document.getElementById(safeId(`op:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
+    if(techOn){ for(const [n,lg] of techByName){ const cb=document.getElementById(safeId(`tech:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
+    updateMiniLabels();
+    applyDayFilter();
+  }
+  toggleOps.onchange=applyVisibility;
+  toggleTech.onchange=applyVisibility;
+  applyVisibility();
+
+  /* === ВКЛАДКИ / МАСС-КНОПКИ === */
+  let activeTab="ops";
+  const tabOpsBtn=document.getElementById("tabOps"), tabTechBtn=document.getElementById("tabTech"), tabRouteBtn=document.getElementById("tabRoute");
+  const routePanel=document.getElementById("routePanel");
+  function setTab(t){
+    activeTab=t;
+    tabOpsBtn.classList.toggle("active",t==="ops");
+    tabTechBtn.classList.toggle("active",t==="tech");
+    tabRouteBtn.classList.toggle("active",t==="route");
+    document.getElementById("opsList").style.display=t==="ops"?"":"none";
+    document.getElementById("techList").style.display=t==="tech"?"":"none";
+    routePanel.style.display=t==="route"?"":"none";
+    updateMiniLabels();
+    clearRoute();
+  }
+  tabOpsBtn.onclick=()=>setTab("ops");
+  tabTechBtn.onclick=()=>setTab("tech");
+  tabRouteBtn.onclick=()=>setTab("route");
+
+  document.getElementById("btnShowAll").onclick=()=>{
+    const list=activeTab==="ops"?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+    const store=activeTab==="ops"?opsByName:techByName;
+    const pref=activeTab==="ops"?"op:":"tech:";
+    for(const n of list){
+      const id=safeId(pref+n), cb=document.getElementById(id);
+      if(cb && !cb.checked){ cb.checked=true; const lg=store.get(n); lg.addTo(map); }
+    }
+    updateMiniLabels(); applyDayFilter();
+  };
+  document.getElementById("btnHideAll").onclick=()=>{
+    const list=activeTab==="ops"?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+    const store=activeTab==="ops"?opsByName:techByName;
+    const pref=activeTab==="ops"?"op:":"tech:";
+    for(const n of list){
+      const id=safeId(pref+n), cb=document.getElementById(id);
+      if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); }
+    }
+    updateMiniLabels(); clearRoute();
+  };
+
+  /* === Маршруты === */
+  function fillRouteNames(){
+    const list=routeRole.value==="op"?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+    routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join("");
+  }
+  routeRole.onchange=()=>{fillRouteNames(); clearRoute();};
+  routeName.onchange=clearRoute;
+
+  function currentDayShort(){ return ["Вс","Пн","Вт","Ср","Чт","Пт","Сб"][new Date().getDay()]; }
+  function collectPoints(kind,name,dayFilter){
+    const store=kind==="op"?opsByName:techByName;
+    const layer=store.get(name); if(!layer) return [];
+    const groupOn=kind==="op"?toggleOps.checked:toggleTech.checked; if(!groupOn) return [];
+    const targetDay = dayFilter==="TODAY" ? currentDayShort() : dayFilter;
+    const isAll = (dayFilter==="ALL");
+    const pts=[];
+    layer.eachLayer(m=>{
+      const ll=m.getLatLng();
+      const nm=(m.getTooltip()?.getContent())||"";
+      const days=m._days||[];
+      const allowed = isAll || (days.includes(targetDay));
+      if(allowed) pts.push({lat:ll.lat,lng:ll.lng,title:nm});
+    });
+    return pts;
+  }
+  function toCsv(route){
+    const rows=[["order","name","lat","lng","cum_km"]];
+    let sum=0;
+    for(let i=0;i<route.length;i++){
+      if(i>0) sum+=haversine(route[i-1],route[i]);
+      rows.push([i+1,route[i].title||"",route[i].lat,route[i].lng,sum.toFixed(3)]);
+    }
+    return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(",")).join("\n");
+  }
+
+  routeDay.onchange=applyDayFilter;
+
+  btnBuild.onclick=async()=>{
+    const kind=routeRole.value, name=routeName.value, day=routeDay.value;
+    if(!name){routeMeta.textContent="Выберите имя.";return;}
+    const pts=collectPoints(kind,name,day);
+    if(pts.length<2){routeMeta.textContent="Недостаточно точек по выбранному дню (или слой скрыт).";clearRoute();return;}
+    const MAX=200; let route=twoOpt(nnRoute(pts.slice(0,MAX)));
+    const dayLabel = day==="TODAY" ? `сегодня (${currentDayShort()})` : (day==="ALL"?"все дни":day);
+    setBadge("Маршрут по дорогам…");
+    const {totalKm,totalMin}=await drawRoadRoute(route);
+    setBadge(`${[...ST.opCounts.keys()].length} операторов • ${[...ST.techCounts.keys()].length} техников • ${ST.allMarkers.length} точек`);
+    routeMeta.textContent=`День: ${dayLabel} • Точек: ${route.length} • Длина: ${totalKm.toFixed(2)} км • Время: ${totalMin.toFixed(0)} мин (OSRM)`;
+    const csv=toCsv(route);
+    const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob);
+    btnDownload.onclick=()=>{ const a=document.createElement("a"); a.href=url; a.download=`route_${kind}_${name}_${day}.csv`; document.body.appendChild(a); a.click(); a.remove(); };
+    btnDownload.disabled=false;
+  };
+  btnClear.onclick=clearRoute;
+
+  // старт
+  fillRouteNames();
+  applyDayFilter();
+  updateMiniLabels();
+  map.on("zoomend moveend",updateMiniLabels);
+  map.on("layeradd layerremove",updateMiniLabels);
+
+}catch(err){
+  console.error(err);
+  const d=document.createElement("div"); d.className="fatal";
+  d.innerHTML=`<b>Критическая ошибка</b><br>${err.message||err}`;
+  document.body.appendChild(d);
+  setBadge("Ошибка");
+}
+
+document.getElementById("filtersToggle").onclick=()=>document.body.classList.toggle("filters-closed");
+</script>
 </body>
 </html>
