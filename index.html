@@ -39,7 +39,17 @@
   .fatal{position:absolute;left:8px;right:8px;bottom:8px;z-index:10002;background:#fff;border:1px solid #ddd;border-radius:12px;padding:10px;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.12)}
   .leaflet-control-attribution a[href*="leafletjs.com"]{display:none!important}
   .route-index{background:#222;color:#fff;border-radius:10px;font:700 11px/16px system-ui;width:16px;height:16px;text-align:center;display:inline-block;transform:translate(-9px,-9px);pointer-events:none}
-  .leaflet-tooltip.mini-label{pointer-events:none;background:rgba(255,255,255,.9);color:#111;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:6px;font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.08) z-index: 8000;}
+  .leaflet-tooltip.mini-label{
+    pointer-events:none;
+    background:rgba(255,255,255,.9);
+    color:#111;
+    border:1px solid rgba(0,0,0,.15);
+    padding:1px 4px;
+    border-radius:6px;
+    font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    box-shadow:0 1px 2px rgba(0,0,0,.08);
+    z-index:8000;
+  }
 </style>
 </head>
 <body>
@@ -98,13 +108,10 @@
 <noscript>Нужен JavaScript</noscript>
 
 <script type="module">
-/* Диагностика: покажи строку ошибки */
-
-
 /* === КОНФИГ === */
 const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
-const COLOR_SYNC_URL="https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0зQ/exec".replace("з","Z"); // защита от копипаст-опечаток
+const COLOR_SYNC_URL="https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0ZQ/exec";
 const ENABLE_SYNC=!!COLOR_SYNC_URL&&/^https?:\/\//.test(COLOR_SYNC_URL);
 const COLOR_SYNC_GET=ENABLE_SYNC?("https://r.jina.ai/http/"+COLOR_SYNC_URL.replace(/^https?:\/\//,"")):"";
 
@@ -186,11 +193,12 @@ map.createPane("opPane");   map.getPane("opPane").style.zIndex=450;
 
 /* === МИНИ-ЛЕЙБЛЫ === */
 const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
-// Порог показа мини-лейблов: делаем ниже, чтобы на телефоне было видно
-const MINI_ZOOM = 13;
-// Сколько мини-лейблов позволяем одновременно
+const MINI_ZOOM = 12;
 const MAX_MINI_LABELS = IS_MOBILE ? 100 : 120;
-
+/* безопасные алиасы кадра */
+const RAF = (typeof requestAnimationFrame==='function') ? requestAnimationFrame : (fn)=>setTimeout(fn,0);
+const CAF = (typeof cancelAnimationFrame==='function') ? cancelAnimationFrame : (id)=>clearTimeout(id);
+let miniRafId = null;
 
 /* === СЛОИ / СТАТЫ === */
 const ST={opCounts:new Map(),opDevices:new Map(),techCounts:new Map(),techDevices:new Map(),allMarkers:[]};
@@ -295,7 +303,6 @@ async function drawRoadRoute(ordered){
   });
   map.fitBounds(routeLayer.getBounds().pad(0.2));
   return {totalKm,totalMin};
-  requestAnimationFrame(()=>updateMiniLabels());
 }
 
 /* === ЗАГРУЗКА ДАННЫХ === */
@@ -372,7 +379,11 @@ try{
     }
   }
 
-  if(ST.allMarkers.length){const g=L.featureGroup(ST.allMarkers); map.fitBounds(g.getBounds().pad(0.2));}
+  if(ST.allMarkers.length){
+    const g=L.featureGroup(ST.allMarkers);
+    map.fitBounds(g.getBounds().pad(0.2));
+    RAF(updateMiniLabels); // гарантируем первую отрисовку мини-лейблов после fitBounds
+  }
 
   const opsList=[...ST.opCounts.keys()].sort((a,b)=>(ST.opCounts.get(b)||0)-(ST.opCounts.get(a)||0));
   const techList=[...ST.techCounts.keys()].sort((a,b)=>(ST.techCounts.get(b)||0)-(ST.techCounts.get(a)||0));
@@ -420,8 +431,8 @@ try{
   const toggleTech=document.getElementById("toggleTech");
 
   function updateMiniLabels(){
-    if(miniRaf!==null && cancelAnimationFrame) cancelAnimationFrame(miniRaf);
-    miniRaf=requestAnimationFrame(()=>{
+    if(miniRafId!==null) CAF(miniRafId);
+    miniRafId = RAF(()=>{
       const showZoom=map.getZoom()>=MINI_ZOOM;
       const bounds=map.getBounds();
       const visible=[];
