@@ -185,10 +185,12 @@ map.createPane("techPane"); map.getPane("techPane").style.zIndex=430;
 map.createPane("opPane");   map.getPane("opPane").style.zIndex=450;
 
 /* === МИНИ-ЛЕЙБЛЫ === */
-const IS_MOBILE=matchMedia("(pointer:coarse)").matches;
-const MINI_ZOOM=IS_MOBILE?14:13;
-const MAX_MINI_LABELS=IS_MOBILE?35:60;
-let miniRaf=null;
+const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
+// Порог показа мини-лейблов: делаем ниже, чтобы на телефоне было видно
+const MINI_ZOOM = 12;
+// Сколько мини-лейблов позволяем одновременно
+const MAX_MINI_LABELS = IS_MOBILE ? 100 : 120;
+
 
 /* === СЛОИ / СТАТЫ === */
 const ST={opCounts:new Map(),opDevices:new Map(),techCounts:new Map(),techDevices:new Map(),allMarkers:[]};
