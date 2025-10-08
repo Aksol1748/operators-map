@@ -49,6 +49,10 @@
     font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     box-shadow:0 1px 2px rgba(0,0,0,.08);
     z-index:8000;
+    .as-link{color:#2f80ed;cursor:pointer;text-decoration:underline;font-weight:600}
+    .tech-picker{display:none;margin-top:6px}
+    .tech-picker select{padding:6px 8px;border:1px solid #ddd;border-radius:8px;font:600 12px system-ui}
+    .tech-picker button{margin-left:6px;padding:6px 8px;border:1px solid #ddd;border-radius:8px;background:#f8f8f8;font:600 12px;cursor:pointer}
   }
 </style>
 </head>
@@ -208,6 +212,71 @@ function triangleMarker(latlng,color){
   const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
   const icon=L.divIcon({html:svg,className:"",iconSize:[22,22],iconAnchor:[11,18]});
   return L.marker(latlng,{icon,pane:"techPane"});
+  function getAllTechNames(){
+  // список имён техников по текущим данным
+  return [...ST.techCounts.keys()].sort((a,b)=>a.localeCompare(b,'ru'));
+}
+
+function techPopupHTML({title, tech, cntText='', daysText='', locId}){
+  return `<b>${title}</b><br>
+    Техник: <span class="as-link js-change-tech" data-loc="${locId}">${tech||'—'}</span>${cntText}${daysText}
+    <div class="tech-picker" data-loc="${locId}">
+      <select class="tech-select">
+        ${getAllTechNames().map(n=>`<option value="${n}" ${n===tech?'selected':''}>${n}</option>`).join('')}
+      </select>
+      <button class="tech-apply">Применить</button>
+      <button class="tech-cancel">Отмена</button>
+    </div>`;
+}
+
+// обновляем цифру в строке списка техников (сохраняем хвост " (ТАxxx)" если он есть)
+function updateTechRowCount(name){
+  if(!name) return;
+  const cb = document.getElementById(safeId('tech:'+name));
+  if(!cb) return;
+  const li = cb.closest('li'); if(!li) return;
+  const span = li.querySelector('.count'); if(!span) return;
+  const tail = (span.textContent.match(/\s*\(.+\)$/) || [''])[0];
+  span.textContent = (ST.techCounts.get(name)||0) + tail;
+}
+
+function reassignTech(marker, newTech){
+  const oldTech = marker._techName || '';
+  if(!newTech || newTech===oldTech) return;
+
+  // убрать из старого слоя
+  const oldLg = techByName.get(oldTech);
+  if(oldLg) oldLg.removeLayer(marker);
+
+  // добавить в новый слой (создаём, если вдруг нет)
+  let newLg = techByName.get(newTech);
+  if(!newLg){
+    newLg = L.layerGroup(); // не добавляем сразу на карту — уважаем чекбокс
+    techByName.set(newTech, newLg);
+  }
+  newLg.addLayer(marker);
+
+  // обновить счётчики
+  ST.techCounts.set(oldTech, Math.max(0,(ST.techCounts.get(oldTech)||1)-1));
+  ST.techCounts.set(newTech, (ST.techCounts.get(newTech)||0)+1);
+  updateTechRowCount(oldTech);
+  updateTechRowCount(newTech);
+
+  // перекрасить маркер под цвет нового техника
+  const hex = getColor('tech', newTech, autoColor('tech:'+newTech));
+  recolorTriangleMarker(marker, hex);
+  marker._color = hex;
+  marker._techName = newTech;
+
+  // уважить видимость по чекбоксам/тумблеру «Техники»
+  const newCB = document.getElementById(safeId('tech:'+newTech));
+  if(!(document.getElementById('toggleTech').checked && newCB && newCB.checked)){
+    // если группа выключена — не держим слой на карте
+    map.removeLayer(newLg);
+  }
+
+  applyDayFilter();
+  updateMiniLabels();
 }
 function recolorTriangleMarker(marker,color){
   const el=marker.getElement(); if(!el) return;
