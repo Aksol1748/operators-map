@@ -167,6 +167,29 @@ const COLOR_SYNC_GET=ENABLE_SYNC?("https://r.jina.ai/http/"+COLOR_SYNC_URL.repla
 const WRITE_URL="https://script.google.com/macros/s/PASTE_YOUR_WEB_APP_URL/exec";
 
 /* === УТИЛИТЫ === */
+  // ===== Надёжная загрузка CSS/JS с фолбэками и таймаутом =====
+async function loadWithFallback(urls, {css=false, timeoutMs=10000, note='' } = {}){
+  let lastErr = null;
+  for (const url of urls){
+    setBadge(`Грузим ${note|| (css?'CSS':'JS')}… ${new URL(url).host}`);
+    try{
+      await new Promise((resolve, reject)=>{
+        const el = document.createElement(css?'link':'script');
+        if(css){ el.rel='stylesheet'; el.href=url; } else { el.src=url; }
+        let to = setTimeout(()=>reject(new Error('timeout '+url)), timeoutMs);
+        el.onload = ()=>{ clearTimeout(to); resolve(); };
+        el.onerror = ()=>{ clearTimeout(to); reject(new Error('onerror '+url)); };
+        document.head.appendChild(el);
+      });
+      return; // успех
+    }catch(e){
+      console.warn('[loader fail]', url, e);
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('Не удалось загрузить: '+(urls||[]).join(', '));
+}
+
 const badge=document.getElementById("statusBadge");
 const setBadge=(msg)=>{badge.textContent=msg};
 
@@ -231,10 +254,60 @@ function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex
 
 /* === КАРТА: загрузка либ === */
 setBadge("Грузим библиотеки…");
-await loadStyle("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css");
-await loadScript("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js");
-await loadScript("https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js");
+
+// Leaflet CSS
+await loadWithFallback([
+  "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+], {css:true, note:'Leaflet CSS'});
+
+// Leaflet JS
+await loadWithFallback([
+  "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js",
+  "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+], {note:'Leaflet JS'});
+
+// PapaParse
+await loadWithFallback([
+  "https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js",
+  "https://unpkg.com/papaparse@5.4.1/papaparse.min.js"
+], {note:'PapaParse'});
+
 if(!window.L||!window.Papa) throw new Error("Либы не загрузились");
+
+// ===== Карта и тайлы с фолбэком =====
+const map = L.map("map",{attributionControl:false}).setView([55.75,37.62],9);
+
+function addTilesWithFallback(){
+  const candidates = [
+    // базовый официальный
+    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    // французский зеркальный
+    "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
+    // carto (светлый)
+    "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+  ];
+  let idx = 0, layer = null;
+
+  const tryNext = ()=>{
+    const url = candidates[idx++];
+    if(!url){ console.warn('Нет доступных тайл-серверов'); return; }
+    layer = L.tileLayer(url, {maxZoom:19, attribution:"© OpenStreetMap contributors"});
+    layer.on('tileerror', ()=>{ // если сервер тупит — пробуем следующий
+      if(map.hasLayer(layer)) map.removeLayer(layer);
+      tryNext();
+    });
+    layer.addTo(map);
+  };
+  tryNext();
+}
+addTilesWithFallback();
+
+L.control.attribution({prefix:false}).addTo(map);
+
 
 const map=L.map("map",{attributionControl:false}).setView([55.75,37.62],9);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(map);
