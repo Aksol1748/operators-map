@@ -166,7 +166,7 @@ function ensureMini(marker,title){ if(marker._mini) return marker._mini; marker.
 function showMini(marker){ if(!marker._mini) return; marker._mini.setLatLng(marker.getLatLng()).addTo(map); }
 function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
 
-/* === DOM ССЫЛКИ ДЛЯ «Маршрутов» (ОБЪЯВЛЕНО РАНО!) === */
+/* === DOM ССЫЛКИ ДЛЯ «Маршрутов» === */
 const routeRole=document.getElementById('routeRole'),
       routeName=document.getElementById('routeName'),
       routeDay=document.getElementById('routeDay'),
@@ -182,13 +182,7 @@ function haversine(a,b){const R=6371,toRad=d=>d*Math.PI/180;const dLat=toRad(b.l
 function nnRoute(points){if(points.length<=2)return points.map((p,i)=>({i,...p}));const used=new Set(),route=[];let current=0;used.add(current);route.push(points[current]);while(route.length<points.length){let best=-1,bd=1e9,last=route[route.length-1];for(let i=0;i<points.length;i++){if(used.has(i))continue;const d=haversine(last,points[i]);if(d<bd){bd=d;best=i}}used.add(best);route.push(points[best])}return route.map((p,i)=>({i,...p}));}
 function twoOpt(route){const n=route.length;if(n<4)return route;const dist=(i,j)=>haversine(route[i],route[j]);let improved=true;while(improved){improved=false;for(let i=1;i<n-2;i++){for(let k=i+1;k<n-1;k++){const d1=dist(i-1,i)+dist(k,k+1),d2=dist(i-1,k)+dist(i,k+1);if(d2+1e-9<d1){const rev=route.slice(i,k+1).reverse();route=[...route.slice(0,i),...rev,...route.slice(k+1)];improved=true}}}}return route;}
 let routeLayer=null,routeIndices=[];
-function clearRoute(){
-  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
-  routeIndices.forEach(el=>el.remove());
-  routeIndices=[];
-  routeMeta.textContent='Маршрут не построен.';
-  btnDownload.disabled=true;
-}
+function clearRoute(){ if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;} routeIndices.forEach(el=>el.remove()); routeIndices=[]; routeMeta.textContent='Маршрут не построен.'; btnDownload.disabled=true; }
 async function osrmEdge(a,b){const url=`${OSRM}${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;try{const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw new Error('osrm http '+r.status);const j=await r.json();const route=j.routes&&j.routes[0];if(!route)throw new Error('osrm empty');return{geom:route.geometry,distKm:route.distance/1000,durMin:route.duration/60}}catch(e){const dist=haversine(a,b);return{geom:{type:'LineString',coordinates:[[a.lng,a.lat],[b.lng,b.lat]]},distKm:dist,durMin:(dist/KMH_FALLBACK)*60}}}
 async function drawRoadRoute(ordered){
   clearRoute();
@@ -312,6 +306,7 @@ try{
       const layer=store.get(name);
       layer.eachLayer(m=> kind==='op'? m.setStyle?.({fillColor:hex}) : recolorTriangleMarker(m,hex));
       layer.eachLayer(m=>{ m._color=hex; });
+      updateMiniLabels(); // мгновенно обновить мини-лейблы
     });
   }
 
@@ -326,7 +321,7 @@ try{
     const cb=li.querySelector('input');
     mountColorSwatch(li.querySelector('.swatch'),kind,name,getColor(kind,name,autoColor(kind==='op'?name:'tech:'+name)));
     const layer=(kind==='op'?opsByName:techByName).get(name);
-    cb.onchange=()=>{ if(cb.checked){ if((kind==='op' && toggleOps.checked) || (kind==='tech' && toggleTech.checked)) layer.addTo(map); } else { map.removeLayer(layer); } updateMiniLabels(); };
+    cb.onchange=()=>{ if(cb.checked){ if((kind==='op' && toggleOps.checked) || (kind==='tech' && toggleTech.checked)) layer.addTo(map); } else { map.removeLayer(layer); } updateMiniLabels(); clearRoute(); };
     targetUl.appendChild(li);
   }
 
@@ -365,7 +360,6 @@ try{
   }
 
   function applyDayFilter(){
-    if(!routeDay) return; // страховка
     const daySel=routeDay.value;
     const only=dayOnly.checked;
     const showAll = (daySel==='ALL');
@@ -382,7 +376,7 @@ try{
       }else{
         const el=m.getElement(); if(!el) return;
         const pg=el.querySelector('polygon');
-        if(pg) pg.setAttribute('fill', match ? m._color : '#c8c8c8');
+        if(pg)pg.setAttribute('fill', match ? m._color : '#c8c8c8');
         el.style.opacity = hardHide? (match?1:0) : (match?1:0.35);
         el.style.pointerEvents = (hardHide && !match) ? 'none' : '';
       }
@@ -395,12 +389,12 @@ try{
       styleForMatch(m,match,!showAll && only);
     });
     updateMiniLabels();
-    clearRoute();
+    clearRoute(); // смена дня — убираем индексы маршрута
   }
 
   function applyVisibility(){
-    const opOn=document.getElementById('toggleOps').checked;
-    const techOn=document.getElementById('toggleTech').checked;
+    const opOn=toggleOps.checked;
+    const techOn=toggleTech.checked;
     for(const [,lg] of opsByName) map.removeLayer(lg);
     for(const [,lg] of techByName) map.removeLayer(lg);
     if(opOn){ for(const [n,lg] of opsByName){ const cb=document.getElementById(safeId(`op:${n}`)); if(cb&&cb.checked) lg.addTo(map);} }
@@ -408,9 +402,9 @@ try{
     updateMiniLabels();
     applyDayFilter();
   }
-  document.getElementById('toggleOps').onchange=applyVisibility;
-  document.getElementById('toggleTech').onchange=applyVisibility;
-  applyVisibility(); // теперь безопасно: routeDay уже объявлен
+  toggleOps.onchange=applyVisibility;
+  toggleTech.onchange=applyVisibility;
+  applyVisibility();
 
   /* === ВКЛАДКИ / МАССОВЫЕ КНОПКИ === */
   let activeTab='ops';
@@ -424,14 +418,39 @@ try{
     document.getElementById('opsList').style.display=t==='ops'?'':'none';
     document.getElementById('techList').style.display=t==='tech'?'':'none';
     routePanel.style.display=t==='route'?'':'none';
+    updateMiniLabels();
+    clearRoute();
   }
-  tabOpsBtn.onclick=()=>setTab('ops'); tabTechBtn.onclick=()=>setTab('tech'); tabRouteBtn.onclick=()=>setTab('route');
+  tabOpsBtn.onclick=()=>setTab('ops');
+  tabTechBtn.onclick=()=>setTab('tech');
+  tabRouteBtn.onclick=()=>setTab('route');
 
-  document.getElementById('btnShowAll').onclick=()=>{ const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()]; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && !cb.checked){ cb.checked=true; if((activeTab==='ops' && toggleOps.checked) || (activeTab==='tech' && toggleTech.checked)) store.get(n).addTo(map);} } updateMiniLabels(); applyDayFilter(); };
-  document.getElementById('btnHideAll').onclick=()=>{ const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()]; const store=activeTab==='ops'?opsByName:techByName; const pref=activeTab==='ops'?'op:':'tech:'; for(const n of list){ const id=safeId(pref+n), cb=document.getElementById(id); if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); } } updateMiniLabels(); };
+  document.getElementById('btnShowAll').onclick=()=>{
+    const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+    const store=activeTab==='ops'?opsByName:techByName;
+    const pref=activeTab==='ops'?'op:':'tech:';
+    for(const n of list){
+      const id=safeId(pref+n), cb=document.getElementById(id);
+      if(cb && !cb.checked){ cb.checked=true; const lg=store.get(n); lg.addTo(map);}
+    }
+    updateMiniLabels(); applyDayFilter();
+  };
+  document.getElementById('btnHideAll').onclick=()=>{
+    const list=activeTab==='ops'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+    const store=activeTab==='ops'?opsByName:techByName;
+    const pref=activeTab==='ops'?'op:':'tech:';
+    for(const n of list){
+      const id=safeId(pref+n), cb=document.getElementById(id);
+      if(cb && cb.checked){ cb.checked=false; map.removeLayer(store.get(n)); }
+    }
+    updateMiniLabels(); clearRoute();
+  };
 
   /* === Маршруты === */
-  function fillRouteNames(){ const list=routeRole.value==='op'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()]; routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join(''); }
+  function fillRouteNames(){
+    const list=routeRole.value==='op'?[...ST.opCounts.keys()]:[...ST.techCounts.keys()];
+    routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join('');
+  }
   routeRole.onchange=()=>{fillRouteNames(); clearRoute();};
   routeName.onchange=clearRoute;
 
@@ -476,9 +495,11 @@ try{
   btnClear.onclick=clearRoute;
 
   // стартовые подписи и фильтр дня
+  fillRouteNames();
   applyDayFilter();
   updateMiniLabels();
   map.on('zoomend moveend',updateMiniLabels);
+  map.on('layeradd layerremove',updateMiniLabels);
 
 }catch(e){
   console.error(e);
