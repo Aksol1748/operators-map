@@ -105,8 +105,6 @@
 (function(){const n=window.btoa?window.btoa.bind(window):null;window.btoa=function(s){try{return n?n(s):''}catch(e){return n?n(unescape(encodeURIComponent(s))):''}}})();
 
 /* === КОНФИГ === */
-// ВРЕМЕННЫЙ ПЕРЕВОД В ДЕМО, чтобы исключить зависание из-за сети/доступа к Google Sheets.
-const FORCE_DEMO = true;
 const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
 const COLOR_SYNC_URL='https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0zQ/exec';
@@ -119,17 +117,7 @@ const setBadge=(m)=>badge.textContent=m;
 async function loadStyle(href){await new Promise((res,rej)=>{const l=document.createElement('link');l.rel='stylesheet';l.href=href;l.onload=res;l.onerror=rej;document.head.appendChild(l);});}
 async function loadScript(src){await new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
 function addBuster(u){return u+(u.includes('?')?'&':'?')+'v='+Date.now();}
-async function fetchCsv(url, timeoutMs=10000){
-  const ctrl=new AbortController();
-  const timer=setTimeout(()=>ctrl.abort(), timeoutMs);
-  try{
-    const r=await fetch(addBuster(url),{cache:'no-store', signal: ctrl.signal});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const t=await r.text();
-    if(/^</.test(t)) throw new Error('HTML вместо CSV');
-    return t;
-  } finally { clearTimeout(timer); }
-}
+async function fetchCsv(url){const r=await fetch(addBuster(url),{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const t=await r.text();if(/^</.test(t))throw new Error('HTML вместо CSV');return t;}
 const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
 const num=v=>typeof v==='string'?Number(v.replace(',','.').trim()):Number(v);
 const norm=s=>(s??'').toString().trim();
@@ -144,18 +132,7 @@ const LS_KEY='operators-map:colors';
 function loadLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'{}');}catch{return{}}}
 function saveLocal(obj){localStorage.setItem(LS_KEY,JSON.stringify(obj));}
 const savedLocal=loadLocal();
-async function loadRemoteColors(){
-  if(!ENABLE_SYNC) return {};
-  try{
-    const ctrl=new AbortController();
-    const timer=setTimeout(()=>ctrl.abort(), 6000);
-    const r=await fetch(COLOR_SYNC_GET,{cache:'no-store', signal: ctrl.signal});
-    clearTimeout(timer);
-    const t=await r.text();
-    const j=JSON.parse(t);
-    return j&&j.ok?(j.colors||{}):{};
-  }catch{ return {}; }
-};try{const r=await fetch(COLOR_SYNC_GET,{cache:'no-store'});const t=await r.text();const j=JSON.parse(t);return j&&j.ok?(j.colors||{}):{};}catch{return{}}}
+async function loadRemoteColors(){if(!ENABLE_SYNC)return{};try{const r=await fetch(COLOR_SYNC_GET,{cache:'no-store'});const t=await r.text();const j=JSON.parse(t);return j&&j.ok?(j.colors||{}):{};}catch{return{}}}
 async function saveRemoteColor(kind,name,color){if(!ENABLE_SYNC)return;try{await fetch(COLOR_SYNC_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,name,color})});}catch{}}
 function getColor(kind,name,base){const key=`${kind}:${name}`;return savedLocal[key]||base||autoColor(key);}
 function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex;saveLocal(savedLocal);saveRemoteColor(kind,name,hex);}
@@ -238,21 +215,9 @@ try{
   Object.assign(savedLocal,await loadRemoteColors()); saveLocal(savedLocal);
 
   setBadge('Загрузка «Маршрутов»…');
-  let rows=[];
-try{
-  if(!FORCE_DEMO){
-    const csv=await fetchCsv(ROUTES_CSV, 12000);
-    rows = Papa.parse(csv,{header:true,skipEmptyLines:true}).data||[];
-  } else {
-    throw new Error('FORCE_DEMO enabled');
-  }
-} catch(err){
-  console.warn('Переходим в демо-режим:', err);
-  setBadge('Демо-режим: данные загружены локально');
-  rows = [
-    {"фио оператора":"Алиев Руслан","маршрут":"МЦ Кутузовский","lat":55.742,"lng":37.536,"понедельник":1,"количество аппаратов":2},
-    {"фио оператора":"Алиев Руслан","маршрут":"БЦ Арбат","lat":55.747,"lng":37.584,"среда":1,"количество аппаратов":1},
-    {"фио оператора":"Аминов Руслан","маршрут":"МГУ корпус А","lat":55.702,"lng":37.531,"вторник":1,"количест
+  const csv=await fetchCsv(ROUTES_CSV);
+  const rows=Papa.parse(csv,{header:true,skipEmptyLines:true}).data||[];
+  if(!rows.length) throw new Error('Пустой CSV');
 
   const keys=Object.keys(rows[0]||{});
   const techKey=detect(keys,['фио техника','technician','tech','техник']);
@@ -487,8 +452,7 @@ try{
     });
     return pts;
   }
-  function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('
-'); }
+  function toCsv(route){ const rows=[['order','name','lat','lng','cum_km']]; let sum=0; for(let i=0;i<route.length;i++){ if(i>0) sum+=haversine(route[i-1],route[i]); rows.push([i+1,route[i].title||'',route[i].lat,route[i].lng,sum.toFixed(3)]);} return rows.map(r=>r.map(v=>String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(',')).join('\n'); }
 
   routeDay.onchange=applyDayFilter;
   dayOnly.onchange=applyDayFilter;
