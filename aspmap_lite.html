@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ASPGroupMap — LITE</title>
+
+<!-- СТАТИЧЕСКИЕ ПОДКЛЮЧЕНИЯ (без модулей, без await сверху) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+  html,body{height:100%;margin:0}
+  #map{position:absolute;inset:0;background:#f4f4f4}
+  .status-badge{position:absolute;top:8px;right:8px;z-index:10000;background:rgba(0,0,0,.85);color:#fff;padding:6px 10px;border-radius:12px;font:500 13px/1.2 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  .fatal{position:absolute;left:8px;right:8px;bottom:8px;z-index:10002;background:#fff;border:1px solid #ddd;border-radius:12px;padding:10px;font:14px system-ui;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  .legend{position:absolute;left:8px;top:56px;z-index:9999;background:#fff;border:1px solid #ddd;border-radius:12px;padding:8px 10px;font:13px system-ui;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+  .legend label{display:inline-flex;align-items:center;gap:6px;margin-right:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="status-badge" id="status">Загрузка…</div>
+<div class="legend">
+  <label><input type="checkbox" id="chkOps" checked>Операторы</label>
+  <label><input type="checkbox" id="chkTech" checked>Техники</label>
+</div>
+
+<script>
+(function(){
+  // Глобальные ловцы — чтобы видеть любую ошибку
+  window.addEventListener('error', e=>{
+    showFatal(`JS error: ${e.message}<br>${e.filename}:${e.lineno}:${e.colno}`);
+  });
+  window.addEventListener('unhandledrejection', e=>{
+    showFatal(`Promise error: ${e.reason && e.reason.message ? e.reason.message : e.reason}`);
+  });
+
+  const statusEl = document.getElementById('status');
+  const setStatus = (t)=> statusEl.textContent = t;
+
+  function showFatal(msg){
+    console.error('[FATAL]', msg);
+    const d=document.createElement('div');
+    d.className='fatal';
+    d.innerHTML=`<b>Критическая ошибка</b><br>${msg}`;
+    document.body.appendChild(d);
+    setStatus('Ошибка');
+  }
+
+  // Проверяем, что библиотеки реально в окне
+  if(!window.L){ showFatal('Leaflet не загрузился'); return; }
+  if(!window.Papa){ showFatal('PapaParse не загрузился'); return; }
+
+  // ====== КОНФИГ CSV ======
+  const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
+  const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
+
+  // ====== КАРТА ======
+  const map = L.map('map',{attributionControl:false}).setView([55.75,37.62], 9);
+  // простой тайл с фолбэком
+  const tileCandidates = [
+    "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png",
+    "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+  ];
+  (function addTiles(i=0){
+    if(i>=tileCandidates.length){ console.warn('Нет рабочих тайлов'); return; }
+    const tl = L.tileLayer(tileCandidates[i], {maxZoom:19, attribution:"© OpenStreetMap contributors"});
+    tl.on('tileerror', ()=>{ if(map.hasLayer(tl)) map.removeLayer(tl); addTiles(i+1); });
+    tl.addTo(map);
+  })();
+  L.control.attribution({prefix:false}).addTo(map);
+
+  // Группы слоёв
+  const opsLayers = new Map();   // имя оператора -> LayerGroup
+  const techLayers = new Map();  // имя техника   -> LayerGroup
+  const allMarkers = [];
+
+  function layerFor(store, name){
+    if(!store.has(name)) store.set(name, L.layerGroup().addTo(map));
+    return store.get(name);
+  }
+
+  // маленькие помощники
+  const num = v => typeof v==='string' ? Number(v.replace(',','.').trim()) : Number(v);
+  const norm = s => (s ?? '').toString().trim();
+  function detect(keys, cands){
+    const lower = keys.map(k=>k.toLowerCase());
+    for(const c of cands){ const i = lower.indexOf(c.toLowerCase()); if(i!==-1) return keys[i]; }
+    for(const k of keys){ const lk=k.toLowerCase(); if(cands.some(cc=>lk.includes(cc.toLowerCase()))) return k; }
+    return null;
+  }
+
+  // ====== ЗАГРУЗКА CSV ======
+  (async function load(){
+    try{
+      setStatus('Загрузка таблицы…');
+      const r = await fetch(ROUTES_CSV, {cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const text = await r.text();
+      if(/^</.test(text)) throw new Error('Получен HTML вместо CSV — проверьте доступ "Опубликовать в интернете"');
+      const rows = Papa.parse(text, {header:true, skipEmptyLines:true}).data || [];
+      if(!rows.length) throw new Error('Пустой CSV');
+
+      const keys=Object.keys(rows[0]||{});
+      const techKey=detect(keys,["фио техника","technician","tech","техник"]);
+      const opKey=detect(keys,["фио оператора","оператор","fio","name","operator"]);
+      const nameKey=detect(keys,["маршрут всего локации","маршрут","локация","название","адрес","name"]);
+      const latKey=detect(keys,["lat","latitude","широта","y"]);
+      const lngKey=detect(keys,["lng","lon","longitude","долгота","x"]);
+      if(!latKey||!lngKey) throw new Error('Нет колонок широта/долгота');
+      if(!nameKey) throw new Error('Нет колонки названия локации');
+
+      const features = [];
+
+      for(const row of rows){
+        const lat = num(row[latKey]), lng = num(row[lngKey]);
+        if(!isFinite(lat)||!isFinite(lng)) continue;
+        const title = norm(row[nameKey]) || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        const op = opKey ? norm(row[opKey]) : '';
+        const tech = techKey ? norm(row[techKey]) : '';
+
+        if(tech){
+          const lg = layerFor(techLayers, tech);
+          const m = L.marker([lat,lng], {pane:'markerPane'})
+            .bindTooltip(`${title}`, {sticky:true, direction:'top', offset:[0,-10]})
+            .bindPopup(`<b>${title}</b><br>Техник: ${tech}`);
+          lg.addLayer(m); allMarkers.push(m);
+        }
+        if(op){
+          const lg = layerFor(opsLayers, op);
+          const m = L.circleMarker([lat,lng], {radius:7, weight:2, color:'#222', fillColor:'#3da9f5', fillOpacity:.9})
+            .bindTooltip(`${title}`, {sticky:true, direction:'top', offset:[0,-10]})
+            .bindPopup(`<b>${title}</b><br>Оператор: ${op}`);
+          lg.addLayer(m); allMarkers.push(m);
+        }
+      }
+
+      if(allMarkers.length){
+        const g = L.featureGroup(allMarkers);
+        map.fitBounds(g.getBounds().pad(0.2));
+      }
+
+      // переключатели
+      const chkOps = document.getElementById('chkOps');
+      const chkTech = document.getElementById('chkTech');
+
+      function applyVisibility(){
+        for(const [,lg] of opsLayers) map.removeLayer(lg);
+        for(const [,lg] of techLayers) map.removeLayer(lg);
+        if(chkOps.checked){ for(const [,lg] of opsLayers) lg.addTo(map); }
+        if(chkTech.checked){ for(const [,lg] of techLayers) lg.addTo(map); }
+      }
+      chkOps.onchange = applyVisibility;
+      chkTech.onchange = applyVisibility;
+      applyVisibility();
+
+      setStatus(`Готово • операторов: ${opsLayers.size} • техников: ${techLayers.size} • точек: ${allMarkers.length}`);
+    }catch(err){
+      showFatal(err.message || err);
+    }
+  })();
+})();
+</script>
+</body>
+</html>
