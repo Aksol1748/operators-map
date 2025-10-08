@@ -128,6 +128,25 @@
 
 <noscript>Нужен JavaScript</noscript>
 <script type="module">
+  // === DIAG START ===
+window.addEventListener('error', e => {
+  const m = `JS error: ${e.message}\n${e.filename}:${e.lineno}:${e.colno}`;
+  console.error('[GLOBAL ERROR]', e.error || m);
+  const box = document.createElement('div');
+  box.className = 'fatal';
+  box.innerHTML = `<b>Критическая ошибка</b><br>${m}`;
+  document.body.appendChild(box);
+});
+window.addEventListener('unhandledrejection', e => {
+  const m = `Promise error: ${e.reason?.message || e.reason}`;
+  console.error('[UNHANDLED REJECTION]', e.reason || m);
+  const box = document.createElement('div');
+  box.className = 'fatal';
+  box.innerHTML = `<b>Критическая ошибка</b><br>${m}`;
+  document.body.appendChild(box);
+});
+// === DIAG END ===
+  
 /* === КОНФИГ === */
 const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
