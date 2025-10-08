@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+  <!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="utf-8"/>
@@ -194,6 +194,48 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,att
 L.control.attribution({prefix:false}).addTo(map);
 map.createPane("techPane"); map.getPane("techPane").style.zIndex=430;
 map.createPane("opPane");   map.getPane("opPane").style.zIndex=450;
+  map.on('popupopen', (e)=>{
+  const root = e.popup.getElement();
+  if(!root) return;
+
+  const change = root.querySelector('.js-change-tech');
+  const picker = root.querySelector('.tech-picker');
+
+  if(change && picker){
+    const locId = change.dataset.loc;
+
+    // открыть селектор
+    change.addEventListener('click', ()=>{
+      picker.style.display = 'block';
+    });
+
+    // отмена
+    picker.querySelector('.tech-cancel').addEventListener('click', ()=>{
+      picker.style.display = 'none';
+    });
+
+    // применить
+    picker.querySelector('.tech-apply').addEventListener('click', ()=>{
+      const sel = picker.querySelector('.tech-select');
+      const newTech = sel.value;
+      const marker = ST.allMarkers.find(m=>m._locId===locId);
+      if(marker){
+        reassignTech(marker, newTech);
+        // перерисуем попап с обновлённым именем и снова навесим обработчики
+        e.popup.setContent( techPopupHTML({
+          title: marker._miniTitle || '',
+          tech: marker._techName || '',
+          cntText: marker._cntText || '',
+          daysText: marker._daysText || '',
+          locId
+        }) );
+        // переинициализируем хендлеры сразу
+        setTimeout(()=>map.fire('popupopen', {popup:e.popup}), 0);
+      }
+    });
+  }
+});
+
 
 /* === МИНИ-ЛЕЙБЛЫ === */
 const IS_MOBILE = matchMedia('(pointer:coarse)').matches;
@@ -426,8 +468,12 @@ try{
       const color=getColor("tech",tech,autoColor("tech:"+tech));
       const lg=layerFor(techByName,tech);
       const m=triangleMarker([lat,lng],color)
-        .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]})
-        .bindPopup(`<b>${title}</b><br>Техник: ${tech}${cntText}${daysText}`);
+      .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]});
+      m._locId = safeId(`pt:${title}|${lat}|${lng}`);
+      m._techName = tech;
+      m._cntText = cntText;
+      m._daysText = daysText;
+      m.bindPopup( techPopupHTML({title, tech, cntText, daysText, locId: m._locId}) );
       tagMarker(m,title,days,color);
       lg.addLayer(m);
       ST.techCounts.set(tech,(ST.techCounts.get(tech)||0)+1);
