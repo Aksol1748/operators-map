@@ -337,7 +337,7 @@ try{
         routeMeta=document.getElementById('routeMeta'),
         dayFilterToggle=document.getElementById('dayFilterToggle');
   // алиас для старого имени переменной, чтобы всё, что ждёт dayFilterToggle, работало
-const dayFilterToggle = routeDay;
+  const dayFilterToggle = routeDay;
 
 
   function fillRouteNames(){ const list=routeRole.value==='op'?opsList:techList; routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join(''); }
@@ -436,7 +436,7 @@ const dayFilterToggle = routeDay;
     }
   }
   dayFilterToggle.onchange=applyDayFilter;
-  routeDay.onchange=applyDayFilter;
+  routeDay.onchange = applyDayFilter;
 
   /* === Мини-лейблы === */
   function updateMiniLabels(){
