@@ -40,7 +40,7 @@
   .leaflet-control-attribution a[href*="leafletjs.com"]{display:none!important}
   .route-index{background:#222;color:#fff;border-radius:10px;font:700 11px/16px system-ui;width:16px;height:16px;text-align:center;display:inline-block;transform:translate(-9px,-9px);pointer-events:none}
   .leaflet-tooltip.mini-label{pointer-events:none;background:rgba(255,255,255,.9);color:#111;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:6px;font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.08);z-index:8000}
-  /* мелкие утилиты */
+  /* утилиты для попапов смены */
   .as-link{color:#2f80ed;cursor:pointer;text-decoration:underline;font-weight:600}
   .picker{display:none;margin-top:6px}
   .picker select{padding:6px 8px;border:1px solid #ddd;border-radius:8px;font:600 12px system-ui}
@@ -104,7 +104,7 @@
     <div class="route-meta">⚠️ По дорогам (OSRM), без пробок.</div>
   </div>
 
-  <!-- Панель несохранённых изменений -->
+  <!-- Панель несохранённых изменений (fallback, если нет SAVE_URL) -->
   <div id="changesPanel" class="route-box" style="display:none">
     <div class="route-row" style="gap:6px;flex-wrap:wrap">
       <strong style="font-size:13px">Изменения (не сохранены):</strong>
@@ -124,16 +124,17 @@
 <script type="module">
 /* btoa-shim для старых браузеров */
 (function(){const n=window.btoa?window.btoa.bind(window):null;window.btoa=function(s){try{return n?n(s):''}catch(e){return n?n(unescape(encodeURIComponent(s))):''}}})();
-
 /* === КОНФИГ === */
 const DOC_ID="2PACX-1vQ60bXKqgYfT7N7M5Le0ZWLn4r1ybhUxuYwzAg4hjroeMZHUT_omLa4GwahRBfrEzlG8RKLWMhrKiOP";
 const ROUTES_CSV=`https://docs.google.com/spreadsheets/d/e/${DOC_ID}/pub?gid=1063730162&single=true&output=csv`;
+
 /* синхронизация цветов (опционально) */
 const COLOR_SYNC_URL="https://script.google.com/macros/s/AKfycbx6CILKNKa2466bOsKkWzXjrTBd0-zNNIqwrMsEVWV6KdIFLc4gkqlKOCLpvt81y9e0ZQ/exec";
 const ENABLE_SYNC=!!COLOR_SYNC_URL&&/^https?:\/\//.test(COLOR_SYNC_URL);
 const COLOR_SYNC_GET=ENABLE_SYNC?("https://r.jina.ai/http/"+COLOR_SYNC_URL.replace(/^https?:\/\//,"")):"";
-/* адрес Apps Script для записи изменений (если настроишь веб-приложение) */
-const SAVE_URL='';                           // ← поставь URL скрипта, иначе будет только экспорт CSV
+
+/* адрес Apps Script для записи изменений */
+const SAVE_URL=''; // ← поставь URL веб-приложения GAS; если пусто — будет режим «Подтвердить/Экспорт CSV»
 const HAS_SAVE=typeof SAVE_URL==='string' && /^https?:\/\//.test(SAVE_URL);
 
 /* === УТИЛИТЫ === */
@@ -199,9 +200,8 @@ async function saveRemoteColor(kind,name,color){
 function getColor(kind,name,base){const key=`${kind}:${name}`;return savedLocal[key]||base||autoColor(key);}
 function setColor(kind,name,hex){const key=`${kind}:${name}`;savedLocal[key]=hex;saveLocal(savedLocal);saveRemoteColor(kind,name,hex);}
 
-/* === Корзина изменений (pending) === */
+/* === Корзина изменений (fallback, если нет SAVE_URL) === */
 const PENDING=[]; // {locId,title,lat,lng,kind:'tech'|'op',from,to,ts}
-
 function addChange(rec){
   const i=PENDING.findIndex(x=>x.locId===rec.locId && x.kind===rec.kind);
   if(i>=0){PENDING[i].to=rec.to;PENDING[i].ts=Date.now();}
@@ -238,13 +238,34 @@ async function confirmPending(){
   setBadge('Запись в таблицу…');
   try{
     const r=await fetch(SAVE_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({changes:PENDING})});
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    if(!r.ok){ throw new Error('HTTP '+r.status); }
     PENDING.length=0; renderChangesPanel(); setBadge('Готово');
   }catch(e){ setBadge('Ошибка записи'); alert('Не удалось записать в таблицу: '+(e.message||e)); }
 }
 function revertAll(mapUndo){
   for(let i=PENDING.length-1;i>=0;i--){mapUndo(PENDING[i]);}
   PENDING.length=0; renderChangesPanel();
+}
+
+/* === Автозапись одной правки (если SAVE_URL задан) === */
+async function postChange(rec, undo){
+  if(!HAS_SAVE){ addChange(rec); return; } // fallback в корзину
+  try{
+    setBadge('Запись в таблицу…');
+    const r = await fetch(SAVE_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({changes:[rec]}),
+    });
+    const j = await r.json().catch(()=> ({}));
+    if(!r.ok || !j.ok) throw new Error(j.error || ('HTTP '+r.status));
+    setBadge('Сохранено');
+  }catch(e){
+    setBadge('Ошибка записи');
+    if(typeof undo==='function') undo(); // откатить на карте
+    alert('Не удалось записать в таблицу: '+(e.message||e));
+    throw e;
+  }
 }
 /* === КАРТА === */
 setBadge("Грузим библиотеки…");
@@ -259,13 +280,13 @@ L.control.attribution({prefix:false}).addTo(map);
 map.createPane("techPane"); map.getPane("techPane").style.zIndex=430;
 map.createPane("opPane");   map.getPane("opPane").style.zIndex=450;
 
-/* === РАФ-полифилы для мобильных === */
+/* === РАФ-полифилы для мобильных (исключаем miniRaf ошибки) === */
 const RAF=(typeof requestAnimationFrame==='function')?requestAnimationFrame:(fn)=>setTimeout(fn,0);
 const CAF=(typeof cancelAnimationFrame==='function')?cancelAnimationFrame:(id)=>clearTimeout(id);
 
 /* === МИНИ-ЛЕЙБЛЫ === */
 const IS_MOBILE=matchMedia('(pointer:coarse)').matches;
-const MINI_ZOOM=12;
+const MINI_ZOOM=11;
 const MAX_MINI_LABELS=IS_MOBILE?100:120;
 let miniRafId=null;
 
@@ -288,7 +309,7 @@ function hideMini(marker){ if(marker._mini) marker._mini.remove(); }
 function getAllTechNames(){ return [...ST.techCounts.keys()].sort((a,b)=>a.localeCompare(b,'ru')); }
 function getAllOpNames(){ return [...ST.opCounts.keys()].sort((a,b)=>a.localeCompare(b,'ru')); }
 
-/* единый попап с возможностью смены */
+/* единый попап (смена оператора/техника) */
 function popupHTML({title, op, tech, cntText='', daysText='', locId}){
   return `<b>${title}</b><br>
     Оператор: <span class="as-link js-change-op" data-loc="${locId}">${op||'—'}</span><br>
@@ -308,12 +329,11 @@ function popupHTML({title, op, tech, cntText='', daysText='', locId}){
 
 /* поиск маркера по locId и виду */
 function findMarkerByLoc(kind, locId){
-  // у «операторов» маркер — circleMarker (есть setStyle), у «техников» — divIcon (нет setStyle)
   return ST.allMarkers.find(m => m._locId===locId && (kind==='op' ? !!m.setStyle : !m.setStyle));
 }
 
-/* перенос маркера между группами (ТЕХНИК) */
-function reassignTech(marker, newTech, opts={record:true}){
+/* перенос маркера между группами (ТЕХНИК) + автосейв */
+async function reassignTech(marker, newTech, opts={record:true}){
   const oldTech = marker._techName || '';
   if(!newTech || newTech===oldTech) return;
 
@@ -333,12 +353,13 @@ function reassignTech(marker, newTech, opts={record:true}){
 
   if(opts.record){
     const ll=marker.getLatLng();
-    addChange({locId:marker._locId,title:marker._miniTitle||'',lat:ll.lat,lng:ll.lng,kind:'tech',from:oldTech,to:newTech});
+    const rec = {locId:marker._locId,title:marker._miniTitle||'',lat:ll.lat,lng:ll.lng,kind:'tech',from:oldTech,to:newTech};
+    await postChange(rec, ()=> reassignTech(marker, oldTech, {record:false}));
   }
 }
 
-/* перенос маркера между группами (ОПЕРАТОР) */
-function reassignOp(marker, newOp, opts={record:true}){
+/* перенос маркера между группами (ОПЕРАТОР) + автосейв */
+async function reassignOp(marker, newOp, opts={record:true}){
   const oldOp=marker._opName||'';
   if(!newOp || newOp===oldOp) return;
 
@@ -358,11 +379,12 @@ function reassignOp(marker, newOp, opts={record:true}){
 
   if(opts.record){
     const ll=marker.getLatLng();
-    addChange({locId:marker._locId,title:marker._miniTitle||'',lat:ll.lat,lng:ll.lng,kind:'op',from:oldOp,to:newOp});
+    const rec = {locId:marker._locId,title:marker._miniTitle||'',lat:ll.lat,lng:ll.lng,kind:'op',from:oldOp,to:newOp};
+    await postChange(rec, ()=> reassignOp(marker, oldOp, {record:false}));
   }
 }
 
-/* обработчики в попапе */
+/* обработчики внутри попапа */
 map.on('popupopen',(e)=>{
   const root=e.popup.getElement(); if(!root) return;
   const src=e.popup._source; const locId=src?._locId;
@@ -378,18 +400,17 @@ map.on('popupopen',(e)=>{
   opPicker?.querySelector('.cancel-op')?.addEventListener('click',()=> opPicker.style.display='none');
   techPicker?.querySelector('.cancel-tech')?.addEventListener('click',()=> techPicker.style.display='none');
 
-  opPicker?.querySelector('.apply-op')?.addEventListener('click',()=>{
+  opPicker?.querySelector('.apply-op')?.addEventListener('click', async ()=>{
     const newOp=opPicker.querySelector('.op-select').value;
     const opMarker=findMarkerByLoc('op',locId)||src;
-    reassignOp(opMarker,newOp,{record:true});
+    await reassignOp(opMarker,newOp,{record:true});
   });
-  techPicker?.querySelector('.apply-tech')?.addEventListener('click',()=>{
+  techPicker?.querySelector('.apply-tech')?.addEventListener('click', async ()=>{
     const newTech=techPicker.querySelector('.tech-select').value;
     const techMarker=findMarkerByLoc('tech',locId)||src;
-    reassignTech(techMarker,newTech,{record:true});
+    await reassignTech(techMarker,newTech,{record:true});
   });
 });
-
 /* === OSRM / маршрут === */
 const OSRM="https://router.project-osrm.org/route/v1/driving/"; const KMH_FALLBACK=30;
 function haversine(a,b){
@@ -460,7 +481,8 @@ async function drawRoadRoute(ordered){
   map.fitBounds(routeLayer.getBounds().pad(0.2));
   return {totalKm,totalMin};
 }
-/* === ЗАГРУЗКА ДАННЫХ и UI === */
+
+/* === ЗАГРУЗКА ДАННЫХ и МАРКЕРЫ === */
 try{
   Object.assign(savedLocal,await loadRemoteColors()); saveLocal(savedLocal);
 
@@ -578,7 +600,6 @@ try{
   }
   for(const op of opsList){addRow(opsUL,"op",op,ST.opCounts.get(op)||0,ST.opDevices.get(op)||0);}
   for(const t of techList){addRow(techUL,"tech",t,ST.techCounts.get(t)||0,ST.techDevices.get(t)||0);}
-
   /* === ПЕРЕКЛЮЧАТЕЛИ === */
   const toggleOps=document.getElementById("toggleOps");
   const toggleTech=document.getElementById("toggleTech");
@@ -739,7 +760,8 @@ try{
     btnDownload.disabled=false;
   };
   btnClear.onclick=clearRoute;
-  // кнопки панели изменений
+
+  // Панель изменений (fallback)
   document.getElementById('btnExportCSV').onclick=exportPendingCSV;
   document.getElementById('btnConfirmAll').onclick=confirmPending;
   document.getElementById('btnRevertAll').onclick=()=>revertAll((r)=>{
