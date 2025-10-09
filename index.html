@@ -336,6 +336,9 @@ try{
         btnDownload=document.getElementById('btnDownload'),
         routeMeta=document.getElementById('routeMeta'),
         dayFilterToggle=document.getElementById('dayFilterToggle');
+  // алиас для старого имени переменной, чтобы всё, что ждёт dayFilterToggle, работало
+const dayFilterToggle = routeDay;
+
 
   function fillRouteNames(){ const list=routeRole.value==='op'?opsList:techList; routeName.innerHTML=`<option value="" disabled selected>— выберите —</option>`+list.map(n=>`<option>${n}</option>`).join(''); }
   routeRole.onchange=()=>{fillRouteNames(); applyDayFilter();}; fillRouteNames();
@@ -405,6 +408,7 @@ try{
     return val;                         // 'Пн' … 'Вс'
   }
   function applyDayFilter(){
+    const daySel = routeDay?.value || 'ALL';
     const on=dayFilterToggle.checked;
     const day=selectedDay(); // null — все дни
     const opOn=toggleOps.checked, techOn=toggleTech.checked;
