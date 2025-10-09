@@ -134,7 +134,7 @@ const ENABLE_SYNC=!!COLOR_SYNC_URL&&/^https?:\/\//.test(COLOR_SYNC_URL);
 const COLOR_SYNC_GET=ENABLE_SYNC?("https://r.jina.ai/http/"+COLOR_SYNC_URL.replace(/^https?:\/\//,"")):"";
 
 /* адрес Apps Script для записи изменений */
-const SAVE_URL=''; // ← поставь URL веб-приложения GAS; если пусто — будет режим «Подтвердить/Экспорт CSV»
+const SAVE_URL='https://script.google.com/macros/s/AKfycbw1WkvohPWKQK3K8ATGMFaxRvX2k9Cgh7yxt6P2gPb0MAtzX1C--I6UN72rHuOLiB-Igw/exec'; // ← поставь URL веб-приложения GAS; если пусто — будет режим «Подтвердить/Экспорт CSV»
 const HAS_SAVE=typeof SAVE_URL==='string' && /^https?:\/\//.test(SAVE_URL);
 
 /* === УТИЛИТЫ === */
@@ -249,24 +249,24 @@ function revertAll(mapUndo){
 
 /* === Автозапись одной правки (если SAVE_URL задан) === */
 async function postChange(rec, undo){
-  if(!HAS_SAVE){ addChange(rec); return; } // fallback в корзину
+  if(!HAS_SAVE){ addChange(rec); return; } // fallback в «Корзину», если SAVE_URL пуст
   try{
     setBadge('Запись в таблицу…');
-    const r = await fetch(SAVE_URL, {
+    await fetch(SAVE_URL, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({changes:[rec]}),
+      mode:'no-cors',                         // важно: без префлайта
+      headers:{'Content-Type':'text/plain'},  // simple request
+      body: JSON.stringify({changes:[rec]})
     });
-    const j = await r.json().catch(()=> ({}));
-    if(!r.ok || !j.ok) throw new Error(j.error || ('HTTP '+r.status));
-    setBadge('Сохранено');
+    // Ответ прочитать нельзя (opaque), но на сервер запрос уйдёт, таблица обновится
+    setBadge('Отправлено'); 
   }catch(e){
     setBadge('Ошибка записи');
-    if(typeof undo==='function') undo(); // откатить на карте
+    if(typeof undo==='function') undo(); // откатим на карте
     alert('Не удалось записать в таблицу: '+(e.message||e));
-    throw e;
   }
 }
+
 /* === КАРТА === */
 setBadge("Грузим библиотеки…");
 await loadStyle("https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css");
