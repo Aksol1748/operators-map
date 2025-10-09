@@ -328,13 +328,53 @@ function popupHTML({title, op, tech, cntText='', daysText='', locId}){
 }
 
 /* поиск маркера по locId и виду */
+  
 function findMarkerByLoc(kind, locId){
   return ST.allMarkers.find(m => m._locId===locId && (kind==='op' ? !!m.setStyle : !m.setStyle));
+}
+function updatePopupForLoc(locId){
+  const opM   = findMarkerByLoc('op',   locId);
+  const techM = findMarkerByLoc('tech', locId);
+
+  const any = opM || techM; if(!any) return;
+  const title   = any._miniTitle || '';
+  const cntText = any._cntText   || '';
+  const daysText= any._daysText  || '';
+  const opName   = (opM   && opM._opName)   || (techM && techM._opName)   || '';
+  const techName = (techM && techM._techName) || (opM   && opM._techName) || '';
+
+  if(opM){
+    opM._opName   = opName;
+    opM._techName = techName;
+    opM.setPopupContent(popupHTML({title, op: opName, tech: techName, cntText, daysText, locId: opM._locId}));
+  }
+  if(techM){
+    techM._opName   = opName;
+    techM._techName = techName;
+    techM.setPopupContent(popupHTML({title, op: opName, tech: techName, cntText, daysText, locId: techM._locId}));
+  }
 }
 
 /* перенос маркера между группами (ТЕХНИК) + автосейв */
 async function reassignTech(marker, newTech, opts={record:true}){
   const oldTech = marker._techName || '';
+    // ...
+  marker._techName = newTech;
+
+  // также обновим связанный опер-маркер и оба попапа
+  const opMarker = findMarkerByLoc('op', marker._locId);
+  if(opMarker){ opMarker._techName = newTech; }
+  updatePopupForLoc(marker._locId);
+
+  if(opts.record){
+    const ll = marker.getLatLng();
+    postChange(
+      {locId: marker._locId, title: marker._miniTitle||'', lat: ll.lat, lng: ll.lng, kind: 'tech', from: oldTech, to: newTech},
+      ()=> reassignTech(marker, oldTech, {record:false}) // откат на карте если запись сорвётся
+    );
+  }
+
+
   if(!newTech || newTech===oldTech) return;
 
   const oldLg = techByName.get(oldTech); if(oldLg) oldLg.removeLayer(marker);
@@ -360,6 +400,10 @@ async function reassignTech(marker, newTech, opts={record:true}){
 
 /* перенос маркера между группами (ОПЕРАТОР) + автосейв */
 async function reassignOp(marker, newOp, opts={record:true}){
+  const techMarker = findMarkerByLoc('tech', marker._locId);
+  if(techMarker){ techMarker._opName = newOp; }
+  updatePopupForLoc(marker._locId);
+
   const oldOp=marker._opName||'';
   if(!newOp || newOp===oldOp) return;
 
