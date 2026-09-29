@@ -16,7 +16,8 @@
   body.filters-closed aside#filters{transform:translateX(-110%)}
   #filters h3{margin:4px 6px 6px;font-size:14px;position:sticky;top:0;background:#fff;z-index:3;padding-top:6px}
   #filters .muted{color:#666;font-size:12px;margin-left:6px}
-  .view-toggle{display:flex;gap:10px;align-items:center;padding:6px;position:sticky;top:28px;background:#fff;z-index:3}
+  .view-toggle label{white-space:nowrap;font-size:12px}
+  .view-toggle{flex-wrap:wrap;display:flex;gap:10px;align-items:center;padding:6px;position:sticky;top:28px;background:#fff;z-index:3}
   .view-toggle label{display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer}
   .tabs{display:flex;gap:6px;padding:6px;position:sticky;top:60px;background:#fff;z-index:2}
   .tabs button{flex:1 1 0;min-width:0;padding:6px 8px;border:1px solid #ddd;background:#f7f7f7;border-radius:8px;font:600 12px;cursor:pointer}
@@ -77,6 +78,7 @@
   <div class="view-toggle">
     <label><input type="checkbox" id="toggleOps" checked>Операторы</label>
     <label><input type="checkbox" id="toggleTech">Техники</label>
+    <label title="Левая половина — маршрут, правая — организация"><input type="checkbox" id="toggleOrganization">Организация</label>
   </div>
 
   <div class="tabs">
@@ -333,6 +335,28 @@ function normalizeOrganization(value){
   if(/^(?:ооо\s+)?[«"']?платформа[»"']?$/i.test(name)) return 'Платформа';
   return name||'Не указана';
 }
+// Keep native circle markers so popups, route editing and day filters still work.
+const OrganizationCircle=L.CircleMarker.extend({
+  onAdd(map){L.CircleMarker.prototype.onAdd.call(this,map);this.paintOrganization();},
+  onRemove(map){this._orgGradient?.remove();this._orgGradient=null;L.CircleMarker.prototype.onRemove.call(this,map);},
+  setStyle(style){L.CircleMarker.prototype.setStyle.call(this,style);this.paintOrganization();return this;},
+  paintOrganization(){
+    const path=this.getElement();if(!path)return;
+    if(!document.getElementById('toggleOrganization').checked){path.setAttribute('fill',this.options.fillColor);return;}
+    const svg=path.ownerSVGElement;if(!svg)return;
+    const ns='http://www.w3.org/2000/svg';
+    if(!this._orgGradient){
+      let defs=svg.querySelector('defs');if(!defs){defs=document.createElementNS(ns,'defs');svg.prepend(defs);}
+      const gradient=document.createElementNS(ns,'linearGradient');gradient.id='organization-half-'+L.stamp(this);
+      gradient.setAttribute('x1','0%');gradient.setAttribute('x2','100%');gradient.setAttribute('y1','0%');gradient.setAttribute('y2','0%');
+      for(const offset of ['0%','50%','50%','100%']){const stop=document.createElementNS(ns,'stop');stop.setAttribute('offset',offset);gradient.appendChild(stop);}
+      defs.appendChild(gradient);this._orgGradient=gradient;
+    }
+    const orgColor=ORG_COLORS[this.options.organization]||autoColor('org:'+this.options.organization);
+    [...this._orgGradient.children].forEach((stop,i)=>stop.setAttribute('stop-color',i<2?this.options.fillColor:orgColor));
+    path.setAttribute('fill',`url(#${this._orgGradient.id})`);
+  }
+});
 function validCoordinates(lat,lng){return Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180&&!(lat===0&&lng===0);}
 let missingOrgCoordinates=0;
 function addOrganizationPoint(row,orgKey,nameKey,latKey,lngKey,countKey,opKey,techKey){
@@ -783,7 +807,7 @@ try{
     if(op){
       const color=getColor("op",op,autoColor(op));
       const lg=layerFor(opsByName,op);
-      const m=L.circleMarker([lat,lng],{pane:"opPane",radius:7,weight:2,color:"#222",fillColor:color,fillOpacity:.9})
+      const m=new OrganizationCircle([lat,lng],{organization:normalizeOrganization(orgKey?r[orgKey]:''),pane:"opPane",radius:7,weight:2,color:"#222",fillColor:color,fillOpacity:.9})
         .bindTooltip(title,{sticky:true,direction:"top",offset:[0,-10]});
       m._locId=locId; m._opName=op; m._techName=tech||''; m._cntText=cntText; m._daysText=daysText;
       m.bindPopup(popupHTML({title,op:op,tech:m._techName,cntText:cntText,daysText:daysText,locId}));
@@ -926,6 +950,7 @@ try{
   }
   toggleOps.onchange=applyVisibility;
   toggleTech.onchange=applyVisibility;
+  document.getElementById("toggleOrganization").onchange=()=>ST.allMarkers.forEach(m=>m.paintOrganization?.());
   applyVisibility();
 
   /* === ВКЛАДКИ / МАСС-КНОПКИ === */
