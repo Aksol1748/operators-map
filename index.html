@@ -347,9 +347,24 @@ function addOrganizationPoint(row,orgKey,nameKey,latKey,lngKey,countKey,opKey,te
   organizationPoints.set(key,{organization,title,lat,lng,count,op:opKey?norm(row[opKey]):'',tech:techKey?norm(row[techKey]):''});
 }
 /* Manual revenue snapshot supplied by the owner. No reporting period supplied.
- * Match only unique normalized names; never split or duplicate location revenue. */
+ * Use owner-confirmed aliases and allocations; reject ambiguous target locations. */
 const REVENUE_ROWS=[["Каланчевская",3987580],["Павелецкий",2827340],["Славянский бульвар",2564411],["Киевский",2838590],["Патриот",1344610],["Окружная",2055840],["Курский",1733870],["Крюково",2339070],["Аминьевская",2733740],["Курский МЦД",1754010],["Ярославский вокзал",1170470],["Железнодорожный",1297669],["Белорусский",1166330],["Белорусский вокзал",61780],["Казанский",987140],["Ярославский",1545890],["Нижегородская",1515350],["Стрешнево",1018030],["Волоколамская",762570],["Печатники",716740],["Щукинская",636390],["Лианозово",864655],["Марьина Роща",896670],["Кутузовская",976500],["Тимирязевская",519354],["Пл.Гагарина",735450],["Нахабино",635910],["Долгопрудная",634700],["Остафьево",600740],["Апрелевка",468765],["Подольск",529990],["Переделкино",723490],["Силикатная",501310],["Опалиха",365520],["Ольгино",449650],["Минская",528510],["Лицей Авиатика",13525],["Лесной городок",496020],["Внуково",450590],["Москва-Сити",404360],["Курьяново",444130],["Перерва Депо",349270],["Митьково",447990],["Ховрино",173860],["Пенягино",205380],["Мичуринец",332350],["Очаково",228360],["ВТБ Арена",25600],["Апрелевка Депо",209860],["Поклонная",248480],["Новохохловская",329470],["Химки",217480],["Солнечная",198770],["Кокошкино",218370],["Петровско-Разумовская",189816],["Подсолнечная",106860],["Грачевская",175480],["Новогиреево",154930],["Новодачная",128660],["Ростокино",74580],["Матвеевская",138030],["Лицей МИФИ Пролетарский",3035],["Сетунь",144900],["Мещерская",144020],["Лицей МИФИ Кленовый",3695],["Реутов",132290],["Толстопальцево",118910],["Курская Депо",38910],["ЭлектроХаб Южный",null],["Победа",104080],["Центросоюзный",96910],["Санино",null],["РЖД Балашиха",65830],["Савеловский",112080],["Мытищи",null],["Сокольники",4530],["Крекшино",27600],["Банк",null],["Фитнес Ореховый",null],["Метро",null],["Фитнес ЗИЛ",19960],["Стадион Локомотив",713080],["Брукс Школа",null],["Снегири",1110],["ВЭБ.РФ",19950],["Тестовская",null],["Автосервис",23340],["Академия Падела",10620],["Худ.школа Троицк",2750],["Рабочий поселок",11790],["Кибер Парк Красногорск",47840]];
 const revenueByLoc=new Map();
+const revenueNotesByLoc=new Map();
+// Confirmed by the owner on 2026-09-29. Shares preserve each source total.
+const REVENUE_TARGETS={
+  'Славянский бульвар':[['Славянский',1]],
+  'Пл.Гагарина':[['Гагарина',1]],
+  'Лесной городок':[['Лесной',1]],
+  'Москва-Сити':[['Москва',1]],
+  'Петровско-Разумовская':[['Петровско Разумосвская',1]],
+  'РЖД Балашиха':[['Балашиха',1]],
+  'Кибер Парк Красногорск':[['Кибер парк',1]],
+  'Лицей Авиатика':[['Лицей Лобня',1]],
+  'Ярославский вокзал':[['Ярославский',1]],
+  'Белорусский вокзал':[['Белорусский',1]],
+  'Окружная':[['Окружная Север',0.5],['Окружная Юг',0.5]]
+};
 const revenueName=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g,'е').trim().replace(/\s+/g,' ');
 const rubles=value=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(value)+' ₽';
 function revenueStats(points){
@@ -360,23 +375,33 @@ function revenueSummary(points){
   const stat=revenueStats(points);
   return `Выручка: ${stat.known?rubles(stat.total):'нет данных'} · ${stat.known} из ${points.length} локаций`;
 }
-function revenueHTML(value){
-  return `<div class="revenue-value">Выручка: <b>${Number.isFinite(value)?rubles(value):'нет данных'}</b><br><small>Таблица владельца · период не указан</small></div>`;
+function revenueHTML(value,notes=[]){
+  return `<div class="revenue-value">Выручка: <b>${Number.isFinite(value)?rubles(value):'нет данных'}</b><br><small>Таблица владельца · период не указан</small>${notes.length?'<br><small>'+notes.map(escapeHtml).join('<br>')+'</small>':''}</div>`;
 }
 function matchRevenue(){
-  revenueByLoc.clear();
+  revenueByLoc.clear();revenueNotesByLoc.clear();
   const points=[...organizationPoints.values()],unmatched=[];
   const sourceCounts=new Map();
   for(const [name] of REVENUE_ROWS)sourceCounts.set(revenueName(name),(sourceCounts.get(revenueName(name))||0)+1);
-  for(const point of points)point.revenue=null;
+  for(const point of points){point.revenue=null;point.revenueNotes=[];}
   for(const [name,value] of REVENUE_ROWS){
-    const matches=points.filter(p=>revenueName(p.title)===revenueName(name));
-    if(matches.length!==1||sourceCounts.get(revenueName(name))!==1){unmatched.push([name,value]);continue;}
-    const point=matches[0];point.revenue=value;
-    revenueByLoc.set(safeId('pt:'+point.title+'|'+point.lat+'|'+point.lng),value);
+    const targets=REVENUE_TARGETS[name]||[[name,1]];
+    const matches=targets.map(([title,share])=>({points:points.filter(p=>revenueName(p.title)===revenueName(title)),share}));
+    if(matches.some(m=>m.points.length!==1)||sourceCounts.get(revenueName(name))!==1){unmatched.push([name,value]);continue;}
+    for(const match of matches){
+      const point=match.points[0],amount=value===null?null:value*match.share;
+      if(amount!==null)point.revenue=(point.revenue??0)+amount;
+      point.revenueNotes.push(`${name}${match.share!==1?' · '+match.share*100+'% общей суммы':''}: ${amount===null?'нет данных':rubles(amount)}`);
+    }
+  }
+  for(const point of points){
+    const id=safeId('pt:'+point.title+'|'+point.lat+'|'+point.lng);
+    revenueByLoc.set(id,point.revenue);
+    const notes=point.revenueNotes.length>1||point.revenueNotes.some(n=>n.includes('% общей суммы'))?point.revenueNotes:[];
+    point.revenueNotes=notes;revenueNotesByLoc.set(id,notes);
   }
   const details=document.getElementById('revenueUnmatched');
-  details.innerHTML=`<summary>Не сопоставлено с картой: ${unmatched.length}</summary><p>Эти суммы не включены в итоги. Нужно уточнить название или добавить локацию. «Окружная» не распределена между Севером и Югом.</p><ul>${unmatched.map(([name,value])=>`<li>${escapeHtml(name)} — ${value===null?'нет данных':rubles(value)}</li>`).join('')}</ul>`;
+  details.innerHTML=`<summary>Не сопоставлено с картой: ${unmatched.length}</summary><p>Эти суммы не включены в итоги. Нужно уточнить название или добавить локацию.</p><ul>${unmatched.map(([name,value])=>`<li>${escapeHtml(name)} — ${value===null?'нет данных':rubles(value)}</li>`).join('')}</ul>`;
 }
 
 function mountOrganizations(){
@@ -385,7 +410,7 @@ function mountOrganizations(){
     const name=point.organization;
     if(!organizationGroups.has(name)) organizationGroups.set(name,{name,color:ORG_COLORS[name]||autoColor('org:'+name),layer:L.layerGroup(),points:[],selected:true});
     const group=organizationGroups.get(name);
-    const popup=`<b>${escapeHtml(point.title)}</b><br>Организация: <b>${escapeHtml(name)}</b><br>Аппаратов: ${point.count===null?'не указано':point.count}<br>Оператор: ${escapeHtml(point.op)||'—'}<br>Техник: ${escapeHtml(point.tech)||'—'}${revenueHTML(point.revenue)}`;
+    const popup=`<b>${escapeHtml(point.title)}</b><br>Организация: <b>${escapeHtml(name)}</b><br>Аппаратов: ${point.count===null?'не указано':point.count}<br>Оператор: ${escapeHtml(point.op)||'—'}<br>Техник: ${escapeHtml(point.tech)||'—'}${revenueHTML(point.revenue,point.revenueNotes)}`;
     const marker=L.circleMarker([point.lat,point.lng],{pane:'opPane',radius:9,weight:2,color:'#fff',fillColor:group.color,fillOpacity:0.95}).bindPopup(popup).bindTooltip(escapeHtml(point.title),{sticky:true});
     marker._miniTitle=escapeHtml(point.title);
     point.marker=marker;group.points.push(point);group.layer.addLayer(marker);
@@ -444,7 +469,7 @@ function popupHTML({title, op, tech, cntText='', daysText='', locId}){
   return `<b>${title}</b><br>
     Оператор: <span class="as-link js-change-op" data-loc="${locId}">${op||'—'}</span><br>
     Техник: <span class="as-link js-change-tech" data-loc="${locId}">${tech||'—'}</span>
-    ${cntText}${daysText}${revenueHTML(revenueByLoc.get(locId))}
+    ${cntText}${daysText}${revenueHTML(revenueByLoc.get(locId),revenueNotesByLoc.get(locId))}
     <div class="picker op-picker" data-loc="${locId}">
       <select class="op-select">${getAllOpNames().map(n=>`<option value="${n}" ${n===op?'selected':''}>${n}</option>`).join('')}</select>
       <button class="apply-op">Применить</button>
