@@ -29,6 +29,10 @@
   .swatch{width:14px;height:14px;border-radius:50%;border:1px solid rgba(0,0,0,.2);flex:0 0 14px;cursor:pointer;position:relative}
   .swatch.tri{border-radius:3px;clip-path:polygon(50% 0%,0% 100%,100% 100%)}
   .swatch input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer}
+  .route-revenue{display:block;color:#174e37;font-weight:700;margin-top:3px;white-space:nowrap}
+  #opsList label,#techList label{min-width:0;overflow-wrap:anywhere}
+  .revenue-hover{position:fixed;z-index:20000;pointer-events:none;background:#fff;color:#17212b;border:1px solid #b6c5d1;border-radius:10px;padding:10px 14px;box-shadow:0 4px 20px #0004;max-width:calc(100vw - 24px);font:14px/1.5 system-ui}
+  .revenue-hover strong{display:block;font-size:18px;color:#174e37}
   .count{margin-left:auto;color:#888;font-size:12px}
   .route-box{border-top:1px dashed #e3e3e3;margin:6px;padding:10px 6px 4px}
   .route-row{display:flex;gap:8px;margin:6px 0}
@@ -404,6 +408,21 @@ function matchRevenue(){
   details.innerHTML=`<summary>Не сопоставлено с картой: ${unmatched.length}</summary><p>Эти суммы не включены в итоги. Нужно уточнить название или добавить локацию.</p><ul>${unmatched.map(([name,value])=>`<li>${escapeHtml(name)} — ${value===null?'нет данных':rubles(value)}</li>`).join('')}</ul>`;
 }
 
+const revenueHover=document.createElement('div');
+revenueHover.className='revenue-hover';revenueHover.hidden=true;revenueHover.setAttribute('role','tooltip');document.body.appendChild(revenueHover);
+function hideRevenueHover(){revenueHover.hidden=true;}
+function showRevenueHover(point,event){
+  if(!organizationMode)return;
+  revenueHover.innerHTML=`${escapeHtml(point.title)}<strong>${point.revenue===null?'Выручка: нет данных':rubles(point.revenue)}</strong><small>Период не указан</small>`;
+  revenueHover.hidden=false;
+  const pos=event.originalEvent, fallback=map.latLngToContainerPoint([point.lat,point.lng]),rect=map.getContainer().getBoundingClientRect();
+  const x=pos?.clientX??rect.left+fallback.x,y=pos?.clientY??rect.top+fallback.y;
+  const box=revenueHover.getBoundingClientRect();
+  revenueHover.style.left=Math.max(8,Math.min(x+14,innerWidth-box.width-8))+'px';
+  revenueHover.style.top=Math.max(8,Math.min(y+14,innerHeight-box.height-8))+'px';
+}
+map.on('movestart zoomstart',hideRevenueHover);
+window.addEventListener('blur',hideRevenueHover);
 function mountOrganizations(){
   matchRevenue();
   for(const point of organizationPoints.values()){
@@ -411,7 +430,9 @@ function mountOrganizations(){
     if(!organizationGroups.has(name)) organizationGroups.set(name,{name,color:ORG_COLORS[name]||autoColor('org:'+name),layer:L.layerGroup(),points:[],selected:true});
     const group=organizationGroups.get(name);
     const popup=`<b>${escapeHtml(point.title)}</b><br>Организация: <b>${escapeHtml(name)}</b><br>Аппаратов: ${point.count===null?'не указано':point.count}<br>Оператор: ${escapeHtml(point.op)||'—'}<br>Техник: ${escapeHtml(point.tech)||'—'}${revenueHTML(point.revenue,point.revenueNotes)}`;
-    const marker=L.circleMarker([point.lat,point.lng],{pane:'opPane',radius:9,weight:2,color:'#fff',fillColor:group.color,fillOpacity:0.95}).bindPopup(popup).bindTooltip(escapeHtml(point.title),{sticky:true});
+    const marker=L.circleMarker([point.lat,point.lng],{pane:'opPane',radius:9,weight:2,color:'#fff',fillColor:group.color,fillOpacity:0.95}).bindPopup(popup);
+    marker.on('mouseover mousemove',event=>showRevenueHover(point,event));
+    marker.on('mouseout remove click',hideRevenueHover);
     marker._miniTitle=escapeHtml(point.title);
     point.marker=marker;group.points.push(point);group.layer.addLayer(marker);
   }
@@ -429,6 +450,7 @@ function mountOrganizations(){
   document.getElementById('orgFit').onclick=()=>renderOrganizationVisibility(true);
 }
 function renderOrganizationVisibility(fit=false){
+  hideRevenueHover();
   const visible=[];
   for(const group of organizationGroups.values()){
     map.removeLayer(group.layer);
@@ -449,6 +471,19 @@ function renderOrganizationVisibility(fit=false){
 const ST={opCounts:new Map(),opDevices:new Map(),techCounts:new Map(),techDevices:new Map(),allMarkers:[]};
 const opsByName=new Map(), techByName=new Map();
 
+function routeRevenue(kind,name){
+  const points=new Map();
+  for(const marker of ST.allMarkers){
+    if((kind==='op'?marker._opName:marker._techName)===name)points.set(marker._locId,{revenue:revenueByLoc.get(marker._locId)??null});
+  }
+  const stat=revenueStats([...points.values()]);
+  return {text:stat.known?rubles(stat.total):'Нет данных',title:`Общая выручка маршрута · ${stat.known} из ${points.size} локаций · период не указан`};
+}
+function refreshRouteRevenue(){
+  document.querySelectorAll('[data-revenue-kind]').forEach(el=>{
+    const value=routeRevenue(el.dataset.revenueKind,el.dataset.revenueName);el.textContent=value.text;el.title=value.title;
+  });
+}
 function layerFor(mapObj,name){if(!mapObj.has(name))mapObj.set(name,L.layerGroup().addTo(map));return mapObj.get(name);}
 function triangleMarker(latlng,color){
   const svg=`<svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><polygon points="12,3 2,21 22,21" fill="${color}" stroke="#222" stroke-width="2"/></svg>`;
@@ -488,6 +523,7 @@ function findMarkerByLoc(kind, locId){
   return ST.allMarkers.find(m => m._locId===locId && (kind==='op' ? !!m.setStyle : !m.setStyle));
 }
 function updatePopupForLoc(locId){
+  queueMicrotask(refreshRouteRevenue);
   const opM   = findMarkerByLoc('op',   locId);
   const techM = findMarkerByLoc('tech', locId);
 
@@ -792,11 +828,12 @@ try{
   function addRow(targetUl,kind,name,count,devices){
     const id=safeId(`${kind}:${name}`); const sw=kind==="tech"?"swatch tri":"swatch";
     const li=document.createElement("li");
+    const revenue=routeRevenue(kind,name);
     const devicesText=devices?` (ТА${devices})`:"";
     li.innerHTML=`<input type="checkbox" id="${id}" checked>
       <span class="${sw}"></span>
       <label for="${id}">${name}</label>
-      <span class="count">${count}${devicesText}</span>`;
+      <span class="count">${count}${devicesText}<span class="route-revenue" data-revenue-kind="${kind}" data-revenue-name="${escapeHtml(name)}" title="${escapeHtml(revenue.title)}">${revenue.text}</span></span>`;
     const cb=li.querySelector("input");
     mountColorSwatch(li.querySelector(".swatch"),kind,name,getColor(kind,name,autoColor(kind==="op"?name:"tech:"+name)));
     const layer=(kind==="op"?opsByName:techByName).get(name);
