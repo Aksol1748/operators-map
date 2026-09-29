@@ -42,6 +42,12 @@
   .route-index{background:#222;color:#fff;border-radius:10px;font:700 11px/16px system-ui;width:16px;height:16px;text-align:center;display:inline-block;transform:translate(-9px,-9px);pointer-events:none}
   .leaflet-tooltip.mini-label{pointer-events:none;background:rgba(255,255,255,.9);color:#111;border:1px solid rgba(0,0,0,.15);padding:1px 4px;border-radius:6px;font:600 11px/1.1 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.08);z-index:8000}
   .org-choice{display:flex;align-items:center;gap:8px;padding:10px 6px;cursor:pointer}
+  .revenue-value{margin:10px 0;font-size:14px;line-height:1.5}
+  .revenue-value small,.revenue-note{font-size:12px;color:#666}
+  #revenueUnmatched{font-size:12px;overflow-wrap:anywhere;margin:12px 0}
+  #revenueUnmatched summary{cursor:pointer;font-weight:600}
+  #revenueUnmatched ul{padding-left:18px}
+  .org-choice .org-revenue{color:#174e37;font-weight:600;margin-top:4px}
   .org-choice input{width:18px;height:18px;flex:none}
   .org-choice .swatch{cursor:default}
   .org-choice small{display:block;color:#666;font-size:12px}
@@ -89,6 +95,9 @@
     <p>Одна точка — одна локация. Количество аппаратов указано в карточке. Здесь показаны все дни и сотрудники.</p>
     <div id="orgChoices"></div>
     <p id="orgSummary" role="status"></p>
+    <p id="orgRevenueSummary" role="status" class="revenue-value"></p>
+    <p class="revenue-note">Выручка из таблицы владельца. Период не указан. Итоги только по сопоставленным локациям; «—» означает отсутствие данных.</p>
+    <details id="revenueUnmatched"></details>
     <button id="orgFit" type="button">Показать выбранные на карте</button>
   </section>
 
@@ -337,12 +346,46 @@ function addOrganizationPoint(row,orgKey,nameKey,latKey,lngKey,countKey,opKey,te
   if(previous){if(previous.count!==count) previous.count=null;return;}
   organizationPoints.set(key,{organization,title,lat,lng,count,op:opKey?norm(row[opKey]):'',tech:techKey?norm(row[techKey]):''});
 }
+/* Manual revenue snapshot supplied by the owner. No reporting period supplied.
+ * Match only unique normalized names; never split or duplicate location revenue. */
+const REVENUE_ROWS=[["Каланчевская",3987580],["Павелецкий",2827340],["Славянский бульвар",2564411],["Киевский",2838590],["Патриот",1344610],["Окружная",2055840],["Курский",1733870],["Крюково",2339070],["Аминьевская",2733740],["Курский МЦД",1754010],["Ярославский вокзал",1170470],["Железнодорожный",1297669],["Белорусский",1166330],["Белорусский вокзал",61780],["Казанский",987140],["Ярославский",1545890],["Нижегородская",1515350],["Стрешнево",1018030],["Волоколамская",762570],["Печатники",716740],["Щукинская",636390],["Лианозово",864655],["Марьина Роща",896670],["Кутузовская",976500],["Тимирязевская",519354],["Пл.Гагарина",735450],["Нахабино",635910],["Долгопрудная",634700],["Остафьево",600740],["Апрелевка",468765],["Подольск",529990],["Переделкино",723490],["Силикатная",501310],["Опалиха",365520],["Ольгино",449650],["Минская",528510],["Лицей Авиатика",13525],["Лесной городок",496020],["Внуково",450590],["Москва-Сити",404360],["Курьяново",444130],["Перерва Депо",349270],["Митьково",447990],["Ховрино",173860],["Пенягино",205380],["Мичуринец",332350],["Очаково",228360],["ВТБ Арена",25600],["Апрелевка Депо",209860],["Поклонная",248480],["Новохохловская",329470],["Химки",217480],["Солнечная",198770],["Кокошкино",218370],["Петровско-Разумовская",189816],["Подсолнечная",106860],["Грачевская",175480],["Новогиреево",154930],["Новодачная",128660],["Ростокино",74580],["Матвеевская",138030],["Лицей МИФИ Пролетарский",3035],["Сетунь",144900],["Мещерская",144020],["Лицей МИФИ Кленовый",3695],["Реутов",132290],["Толстопальцево",118910],["Курская Депо",38910],["ЭлектроХаб Южный",null],["Победа",104080],["Центросоюзный",96910],["Санино",null],["РЖД Балашиха",65830],["Савеловский",112080],["Мытищи",null],["Сокольники",4530],["Крекшино",27600],["Банк",null],["Фитнес Ореховый",null],["Метро",null],["Фитнес ЗИЛ",19960],["Стадион Локомотив",713080],["Брукс Школа",null],["Снегири",1110],["ВЭБ.РФ",19950],["Тестовская",null],["Автосервис",23340],["Академия Падела",10620],["Худ.школа Троицк",2750],["Рабочий поселок",11790],["Кибер Парк Красногорск",47840]];
+const revenueByLoc=new Map();
+const revenueName=value=>String(value??'').normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g,'е').trim().replace(/\s+/g,' ');
+const rubles=value=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(value)+' ₽';
+function revenueStats(points){
+  const known=points.filter(p=>Number.isFinite(p.revenue));
+  return {total:known.reduce((sum,p)=>sum+p.revenue,0),known:known.length};
+}
+function revenueSummary(points){
+  const stat=revenueStats(points);
+  return `Выручка: ${stat.known?rubles(stat.total):'нет данных'} · ${stat.known} из ${points.length} локаций`;
+}
+function revenueHTML(value){
+  return `<div class="revenue-value">Выручка: <b>${Number.isFinite(value)?rubles(value):'нет данных'}</b><br><small>Таблица владельца · период не указан</small></div>`;
+}
+function matchRevenue(){
+  revenueByLoc.clear();
+  const points=[...organizationPoints.values()],unmatched=[];
+  const sourceCounts=new Map();
+  for(const [name] of REVENUE_ROWS)sourceCounts.set(revenueName(name),(sourceCounts.get(revenueName(name))||0)+1);
+  for(const point of points)point.revenue=null;
+  for(const [name,value] of REVENUE_ROWS){
+    const matches=points.filter(p=>revenueName(p.title)===revenueName(name));
+    if(matches.length!==1||sourceCounts.get(revenueName(name))!==1){unmatched.push([name,value]);continue;}
+    const point=matches[0];point.revenue=value;
+    revenueByLoc.set(safeId('pt:'+point.title+'|'+point.lat+'|'+point.lng),value);
+  }
+  const details=document.getElementById('revenueUnmatched');
+  details.innerHTML=`<summary>Не сопоставлено с картой: ${unmatched.length}</summary><p>Эти суммы не включены в итоги. Нужно уточнить название или добавить локацию. «Окружная» не распределена между Севером и Югом.</p><ul>${unmatched.map(([name,value])=>`<li>${escapeHtml(name)} — ${value===null?'нет данных':rubles(value)}</li>`).join('')}</ul>`;
+}
+
 function mountOrganizations(){
+  matchRevenue();
   for(const point of organizationPoints.values()){
     const name=point.organization;
     if(!organizationGroups.has(name)) organizationGroups.set(name,{name,color:ORG_COLORS[name]||autoColor('org:'+name),layer:L.layerGroup(),points:[],selected:true});
     const group=organizationGroups.get(name);
-    const popup=`<b>${escapeHtml(point.title)}</b><br>Организация: <b>${escapeHtml(name)}</b><br>Аппаратов: ${point.count===null?'не указано':point.count}<br>Оператор: ${escapeHtml(point.op)||'—'}<br>Техник: ${escapeHtml(point.tech)||'—'}`;
+    const popup=`<b>${escapeHtml(point.title)}</b><br>Организация: <b>${escapeHtml(name)}</b><br>Аппаратов: ${point.count===null?'не указано':point.count}<br>Оператор: ${escapeHtml(point.op)||'—'}<br>Техник: ${escapeHtml(point.tech)||'—'}${revenueHTML(point.revenue)}`;
     const marker=L.circleMarker([point.lat,point.lng],{pane:'opPane',radius:9,weight:2,color:'#fff',fillColor:group.color,fillOpacity:0.95}).bindPopup(popup).bindTooltip(escapeHtml(point.title),{sticky:true});
     marker._miniTitle=escapeHtml(point.title);
     point.marker=marker;group.points.push(point);group.layer.addLayer(marker);
@@ -353,7 +396,7 @@ function mountOrganizations(){
     const group=organizationGroups.get(name),label=document.createElement('label');
     label.className='org-choice';
     const count=group.points.reduce((n,p)=>n+(p.count??0),0),unknown=group.points.filter(p=>p.count===null).length;
-    label.innerHTML=`<input type="checkbox" checked><span class="swatch" style="background:${group.color}"></span><span><b>${escapeHtml(name)}</b><small>${group.points.length} локаций · ${count} аппаратов${unknown?' + есть неуказанные':''}</small></span>`;
+    label.innerHTML=`<input type="checkbox" checked><span class="swatch" style="background:${group.color}"></span><span><b>${escapeHtml(name)}</b><small>${group.points.length} локаций · ${count} аппаратов${unknown?' + есть неуказанные':''}</small><small class="org-revenue">${revenueSummary(group.points)}</small></span>`;
     group.checkbox=label.querySelector('input');
     group.checkbox.onchange=()=>{group.selected=group.checkbox.checked;renderOrganizationVisibility();};
     choices.appendChild(label);
@@ -371,6 +414,7 @@ function renderOrganizationVisibility(fit=false){
   const count=visible.reduce((n,p)=>n+(p.count??0),0),unknown=visible.filter(p=>p.count===null).length;
   const message=`${visible.length} локаций · ${count} аппаратов${unknown?' + есть неуказанные':''}`;
   document.getElementById('orgSummary').textContent=message+(missingOrgCoordinates?` · без координат: ${missingOrgCoordinates}`:'');
+  document.getElementById('orgRevenueSummary').textContent=revenueSummary(visible);
   setBadge(message);
   document.getElementById('totals').textContent=message;
   if(fit&&visible.length)map.fitBounds(L.latLngBounds(visible.map(p=>[p.lat,p.lng])).pad(0.15),{maxZoom:14});
@@ -400,7 +444,7 @@ function popupHTML({title, op, tech, cntText='', daysText='', locId}){
   return `<b>${title}</b><br>
     Оператор: <span class="as-link js-change-op" data-loc="${locId}">${op||'—'}</span><br>
     Техник: <span class="as-link js-change-tech" data-loc="${locId}">${tech||'—'}</span>
-    ${cntText}${daysText}
+    ${cntText}${daysText}${revenueHTML(revenueByLoc.get(locId))}
     <div class="picker op-picker" data-loc="${locId}">
       <select class="op-select">${getAllOpNames().map(n=>`<option value="${n}" ${n===op?'selected':''}>${n}</option>`).join('')}</select>
       <button class="apply-op">Применить</button>
@@ -691,6 +735,7 @@ try{
   }
 
   mountOrganizations();
+  for(const id of new Set(ST.allMarkers.map(m=>m._locId)))updatePopupForLoc(id);
 
   if(ST.allMarkers.length){
     const g=L.featureGroup(ST.allMarkers); map.fitBounds(g.getBounds().pad(0.2));
